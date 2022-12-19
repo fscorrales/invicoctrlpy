@@ -12,6 +12,9 @@ setup(
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
     install_requires=[
+        'datar',
+        'os',
+        'ipykernel',
     ],
     dependency_links=['http://github.com/fscorrales/invicodatpy/tarball/master#egg=invicodatpy#']
 )
