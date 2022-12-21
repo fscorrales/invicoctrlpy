@@ -15,6 +15,7 @@ setup(
         'datar',
         'os',
         'ipykernel',
+        'itables',
     ],
     dependency_links=['http://github.com/fscorrales/invicodatpy/tarball/master#egg=invicodatpy#']
 )
