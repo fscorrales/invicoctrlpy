@@ -26,13 +26,14 @@ from invicodatpy.siif.ppto_gtos_fte_rf602 import PptoGtosFteRf602
 from invicodatpy.siif.resumen_fdos_rfondo07tp import ResumenFdosRfondo07tp
 from invicodatpy.siif.join_comprobantes_gtos_gpo_part import JoinComprobantesGtosGpoPart
 from invicodatpy.sscc.ctas_ctes import CtasCtes
+import update_db
 
-
-@dataclass
 # --------------------------------------------------
+@dataclass
 class IcaroVsSIIF():
     ejercicio:str = str(dt.datetime.now().year)
     db_path:str = None
+    update_db:bool = False
     ctas_ctes:pd.DataFrame = field(init=False, repr=False)
     icaro:pd.DataFrame = field(init=False, repr=False)
     siif_rf602:pd.DataFrame = field(init=False, repr=False)
@@ -43,7 +44,31 @@ class IcaroVsSIIF():
     def __post_init__(self):
         if self.db_path == None:
             self.get_db_path()
+        if self.update_db:
+            self.update_sql_db()
         self.import_dfs()
+
+    # --------------------------------------------------
+    def update_sql_db(self):
+        update_path_input = self.get_update_path_input()
+        
+        update_siif = update_db.UpdateSIIF(
+            update_path_input + '/Reportes SIIF', 
+            self.db_path + '/siif.sqlite')
+        update_siif.update_ppto_gtos_fte_rf602()
+        update_siif.update_comprobantes_gtos_gpo_part_gto_rpa03g()
+        update_siif.update_comprobantes_gtos_rcg01_uejp()
+        update_siif.update_resumen_fdos_rfondo07tp()
+
+        update_sscc = update_db.UpdateSSCC(
+            update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
+            self.db_path + '/sscc.sqlite')
+        update_sscc.update_ctas_ctes()
+
+        update_icaro = update_db.UpdateIcaro(
+            self.get_outside_path() + '/R Output/SQLite Files/ICARO.sqlite', 
+            self.db_path + '/icaro.sqlite')
+        update_icaro.migrate_icaro()
 
     # --------------------------------------------------
     def import_dfs(self):
@@ -259,8 +284,8 @@ class IcaroVsSIIF():
         return control_pa6
 
     # --------------------------------------------------
-    def get_db_path(self):
-        self.db_path = os.path.dirname(
+    def get_outside_path(self):
+        dir_path = os.path.dirname(
                         os.path.dirname(
                             os.path.dirname(
                                 os.path.dirname(
@@ -269,7 +294,19 @@ class IcaroVsSIIF():
                                             inspect.getfile(
                                                 inspect.currentframe()))
                         )))))
-        self.db_path += '/Python Output/SQLite Files'
+        return dir_path
+
+    # --------------------------------------------------
+    def get_db_path(self):
+        self.db_path = (self.get_outside_path() 
+                        + '/Python Output/SQLite Files')
+        return self.db_path
+
+    # --------------------------------------------------
+    def get_update_path_input(self):
+        dir_path = (self.get_outside_path() 
+                    + '/invicoDB/Base de Datos')
+        return dir_path
 
     # --------------------------------------------------
     def import_ctas_ctes(self):
@@ -352,12 +389,13 @@ def main():
     args = get_args()
     control = IcaroVsSIIF(
         ejercicio = args.ejercicio,
-        db_path = args.path)
-    df = control.control_pa6()
-    print(df.head(5))
+        db_path = args.path,
+        update_db= True)
+    # df = control.control_pa6()
+    # print(df.head(5))
 
 # --------------------------------------------------
 if __name__ == '__main__':
     main()
-    # From src/invicoctrlpy/icaro/
+    # From invicoctrlpy/src/invicoctrlpy/icaro
     # python icaro_vs_siif.py -e 2021
