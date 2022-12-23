@@ -13,9 +13,12 @@ setup(
     package_dir={'': 'src'},
     install_requires=[
         'datar',
-        'os',
+        'nbconvert',
         'ipykernel',
         'itables',
+        'pivottablejs',
     ],
-    dependency_links=['http://github.com/fscorrales/invicodatpy/tarball/master#egg=invicodatpy#']
+    dependency_links=[
+        'http://github.com/fscorrales/invicodatpy/tarball/master#egg=invicodatpy#',
+        'http://github.com/fscorrales/invicoDB/tarball/master#egg=invicoDB#']
 )
