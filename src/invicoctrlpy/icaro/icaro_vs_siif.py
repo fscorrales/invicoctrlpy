@@ -49,6 +49,31 @@ class IcaroVsSIIF():
         self.import_dfs()
 
     # --------------------------------------------------
+    def get_outside_path(self):
+        dir_path = os.path.dirname(
+                        os.path.dirname(
+                            os.path.dirname(
+                                os.path.dirname(
+                                    os.path.dirname(
+                                        os.path.abspath(
+                                            inspect.getfile(
+                                                inspect.currentframe()))
+                        )))))
+        return dir_path
+
+    # --------------------------------------------------
+    def get_db_path(self):
+        self.db_path = (self.get_outside_path() 
+                        + '/Python Output/SQLite Files')
+        return self.db_path
+
+    # --------------------------------------------------
+    def get_update_path_input(self):
+        dir_path = (self.get_outside_path() 
+                    + '/invicoDB/Base de Datos')
+        return dir_path
+
+    # --------------------------------------------------
     def update_sql_db(self):
         update_path_input = self.get_update_path_input()
         
@@ -282,31 +307,6 @@ class IcaroVsSIIF():
             ascending=False, inplace=True)
         control_pa6.reset_index(drop=True, inplace=True)
         return control_pa6
-
-    # --------------------------------------------------
-    def get_outside_path(self):
-        dir_path = os.path.dirname(
-                        os.path.dirname(
-                            os.path.dirname(
-                                os.path.dirname(
-                                    os.path.dirname(
-                                        os.path.abspath(
-                                            inspect.getfile(
-                                                inspect.currentframe()))
-                        )))))
-        return dir_path
-
-    # --------------------------------------------------
-    def get_db_path(self):
-        self.db_path = (self.get_outside_path() 
-                        + '/Python Output/SQLite Files')
-        return self.db_path
-
-    # --------------------------------------------------
-    def get_update_path_input(self):
-        dir_path = (self.get_outside_path() 
-                    + '/invicoDB/Base de Datos')
-        return dir_path
 
     # --------------------------------------------------
     def import_ctas_ctes(self):
