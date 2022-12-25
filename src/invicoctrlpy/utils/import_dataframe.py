@@ -1,15 +1,17 @@
 import datetime as dt
 from dataclasses import dataclass, field
 
-from datar import dplyr, base, f
-
 import pandas as pd
+from datar import base, dplyr, f
 from invicodatpy.icaro.migrate_icaro import MigrateIcaro
-from invicodatpy.siif.all import DeudaFlotanteRdeu012
-from invicodatpy.sgf.all import JoinResumenRendProvCuit
-from invicodatpy.sscc.all import CtasCtes
+from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
+from invicodatpy.siif.all import (DeudaFlotanteRdeu012,
+                                  JoinComprobantesGtosGpoPart,
+                                  PptoGtosFteRf602, ResumenFdosRfondo07tp)
+from invicodatpy.sscc.all import BancoINVICO, CtasCtes
 
 from .hangling_path import HanglingPath
+
 
 @dataclass
 class ImportDataFrame(HanglingPath):
@@ -19,7 +21,11 @@ class ImportDataFrame(HanglingPath):
     icaro_neto_rdeu:pd.DataFrame = field(init=False, repr=False)
     siif_rdeu012:pd.DataFrame = field(init=False, repr=False)
     sgf_resumen_rend_cuit:pd.DataFrame = field(init=False, repr=False)
-    sgf_resumen_rend_cuit:pd.DataFrame = field(init=False, repr=False)
+    sgf_resumen_rend:pd.DataFrame = field(init=False, repr=False)
+    sscc_banco_invico:pd.DataFrame = field(init=False, repr=False)
+    siif_rf602:pd.DataFrame = field(init=False, repr=False)
+    siif_rfondo07tp:pd.DataFrame = field(init=False, repr=False)
+    siif_comprobantes:pd.DataFrame = field(init=False, repr=False)
 
     # --------------------------------------------------
     def import_ctas_ctes(self) -> pd.DataFrame:
@@ -144,3 +150,77 @@ class ImportDataFrame(HanglingPath):
         df = df.loc[df['ejercicio'] == ejercicio]
         self.icaro_neto_rdeu = df
         return self.icaro_neto_rdeu
+
+    # --------------------------------------------------
+    def import_banco_invico(self, ejercicio:str = None):
+        df = BancoINVICO().from_sql(self.db_path + '/sscc.sqlite')
+        if ejercicio != None:  
+            df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)
+        map_to = self.ctas_ctes.loc[:,['map_to', 'sscc_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='sscc_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'sscc_cta_cte'], axis='columns', inplace=True)
+        self.sscc_banco_invico = df
+        return self.sscc_banco_invico
+
+    # --------------------------------------------------
+    def import_resumen_rend(self, ejercicio:str = None):
+        df = ResumenRendProv().from_sql(self.db_path + '/sgf.sqlite')  
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)
+        map_to = self.ctas_ctes.loc[:,['map_to', 'sgf_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='sgf_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'sgf_cta_cte'], axis='columns', inplace=True)
+        #Filtramos los registros duplicados en la 106
+        df_106 = df.copy()
+        df_106 = df_106 >> \
+            dplyr.filter_(f.cta_cte == '106') >> \
+            dplyr.distinct(
+                f.mes, f.fecha, f.beneficiario,
+                f.libramiento_sgf, 
+                _keep_all=True
+            )
+        df = df >> \
+            dplyr.filter_(f.cta_cte != '106') >> \
+            dplyr.bind_rows(df_106)
+        self.sgf_resumen_rend = pd.DataFrame(df)
+        return self.sgf_resumen_rend
+
+    # --------------------------------------------------
+    def import_siif_rf602(self, ejercicio:str = None):
+        df = PptoGtosFteRf602().from_sql(self.db_path + '/siif.sqlite')
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == self.ejercicio]
+        self.siif_rf602 = df
+        return self.siif_rf602
+
+    # --------------------------------------------------
+    def import_siif_rfondo07tp_pa6(self, ejercicio:str = None):
+        df = ResumenFdosRfondo07tp().from_sql(self.db_path + '/siif.sqlite')
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == self.ejercicio]
+        df = df.loc[df['tipo_comprobante'] == 'ADELANTOS A CONTRATISTAS Y PROVEEDORES']
+        self.siif_rfondo07tp = df
+        return self.siif_rfondo07tp
+
+    def import_siif_comprobantes(self, ejercicio:str = None):
+        df = JoinComprobantesGtosGpoPart().from_sql(
+            self.db_path + '/siif.sqlite')
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == self.ejercicio]
+        df.reset_index(drop=True, inplace=True)
+        map_to = self.ctas_ctes.loc[:,['map_to', 'siif_gastos_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='siif_gastos_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'siif_gastos_cta_cte'], axis='columns', inplace=True)
+        self.siif_comprobantes = df
+        return self.siif_comprobantes
