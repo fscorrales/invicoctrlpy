@@ -21,24 +21,15 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 from datar import base, dplyr, f, tidyr
-from invicodatpy.icaro.migrate_icaro import MigrateIcaro
-from invicodatpy.siif.ppto_gtos_fte_rf602 import PptoGtosFteRf602
-from invicodatpy.siif.resumen_fdos_rfondo07tp import ResumenFdosRfondo07tp
-from invicodatpy.siif.join_comprobantes_gtos_gpo_part import JoinComprobantesGtosGpoPart
-from invicodatpy.sscc.ctas_ctes import CtasCtes
+from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 import update_db
 
 # --------------------------------------------------
 @dataclass
-class IcaroVsSIIF():
+class IcaroVsSIIF(ImportDataFrame):
     ejercicio:str = str(dt.datetime.now().year)
     db_path:str = None
     update_db:bool = False
-    ctas_ctes:pd.DataFrame = field(init=False, repr=False)
-    icaro:pd.DataFrame = field(init=False, repr=False)
-    siif_rf602:pd.DataFrame = field(init=False, repr=False)
-    siif_rfondo07tp:pd.DataFrame = field(init=False, repr=False)
-    siif_comprobantes:pd.DataFrame = field(init=False, repr=False)
 
     # --------------------------------------------------
     def __post_init__(self):
@@ -47,31 +38,6 @@ class IcaroVsSIIF():
         if self.update_db:
             self.update_sql_db()
         self.import_dfs()
-
-    # --------------------------------------------------
-    def get_outside_path(self):
-        dir_path = os.path.dirname(
-                        os.path.dirname(
-                            os.path.dirname(
-                                os.path.dirname(
-                                    os.path.dirname(
-                                        os.path.abspath(
-                                            inspect.getfile(
-                                                inspect.currentframe()))
-                        )))))
-        return dir_path
-
-    # --------------------------------------------------
-    def get_db_path(self):
-        self.db_path = (self.get_outside_path() 
-                        + '/Python Output/SQLite Files')
-        return self.db_path
-
-    # --------------------------------------------------
-    def get_update_path_input(self):
-        dir_path = (self.get_outside_path() 
-                    + '/invicoDB/Base de Datos')
-        return dir_path
 
     # --------------------------------------------------
     def update_sql_db(self):
@@ -98,10 +64,24 @@ class IcaroVsSIIF():
     # --------------------------------------------------
     def import_dfs(self):
         self.import_ctas_ctes()
-        self.import_icaro()
+        self.import_icaro(self.ejercicio)
+        self.import_siif_rfondo07tp_pa6(self.ejercicio)
         self.import_siif_rf602()
-        self.import_siif_rfondo07tp()
         self.import_siif_comprobantes()
+
+    # --------------------------------------------------
+    def import_siif_rf602(self):
+        df = super().import_siif_rf602(self.ejercicio)
+        df = df[df['partida'].isin(['421', '422'])]
+        self.siif_rf602 = df
+        return self.siif_rf602
+
+    # --------------------------------------------------
+    def import_siif_comprobantes(self):
+        df = super().import_siif_comprobantes(self.ejercicio)
+        df = df[df['partida'].isin(['421', '422'])]
+        self.siif_comprobantes = df
+        return self.siif_comprobantes
 
     # --------------------------------------------------
     def control_ejecucion_anual(self):
@@ -307,58 +287,6 @@ class IcaroVsSIIF():
             ascending=False, inplace=True)
         control_pa6.reset_index(drop=True, inplace=True)
         return control_pa6
-
-    # --------------------------------------------------
-    def import_ctas_ctes(self):
-        df = CtasCtes().from_sql(self.db_path + '/sscc.sqlite') 
-        self.ctas_ctes = df
-        return self.ctas_ctes
-
-    # --------------------------------------------------
-    def import_icaro(self):
-        df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'carga')  
-        df = df.loc[df['ejercicio'] == self.ejercicio]
-        df.reset_index(drop=True, inplace=True)
-        map_to = self.ctas_ctes.loc[:,['map_to', 'icaro_cta_cte']]
-        df = pd.merge(
-            df, map_to, how='left',
-            left_on='cta_cte', right_on='icaro_cta_cte')
-        df['cta_cte'] = df['map_to']
-        df.drop(['map_to', 'icaro_cta_cte'], axis='columns', inplace=True)
-        self.icaro = df
-        return self.icaro
-
-    # --------------------------------------------------
-    def import_siif_rf602(self):
-        df = PptoGtosFteRf602().from_sql(self.db_path + '/siif.sqlite')
-        df = df.loc[df['ejercicio'] == self.ejercicio]
-        df = df[df['partida'].isin(['421', '422'])]
-        self.siif_rf602 = df
-        return self.siif_rf602
-
-    # --------------------------------------------------
-    def import_siif_rfondo07tp(self):
-        df = ResumenFdosRfondo07tp().from_sql(self.db_path + '/siif.sqlite')
-        df = df.loc[df['ejercicio'] == self.ejercicio]
-        df = df.loc[df['tipo_comprobante'] == 'ADELANTOS A CONTRATISTAS Y PROVEEDORES']
-        self.siif_rfondo07tp = df
-        return self.siif_rfondo07tp
-
-    # --------------------------------------------------
-    def import_siif_comprobantes(self):
-        df = JoinComprobantesGtosGpoPart().from_sql_db(
-            self.db_path + '/siif.sqlite')
-        df = df.loc[df['ejercicio'] == self.ejercicio]
-        df = df[df['partida'].isin(['421', '422'])]
-        df.reset_index(drop=True, inplace=True)
-        map_to = self.ctas_ctes.loc[:,['map_to', 'siif_gastos_cta_cte']]
-        df = pd.merge(
-            df, map_to, how='left',
-            left_on='cta_cte', right_on='siif_gastos_cta_cte')
-        df['cta_cte'] = df['map_to']
-        df.drop(['map_to', 'siif_gastos_cta_cte'], axis='columns', inplace=True)
-        self.siif_comprobantes = df
-        return self.siif_comprobantes
 
 # --------------------------------------------------
 def get_args():
