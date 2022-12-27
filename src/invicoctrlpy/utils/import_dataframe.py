@@ -59,8 +59,9 @@ class ImportDataFrame(HanglingPath):
         icaro = icaro >> \
             dplyr.filter_(f.tipo != 'PA6')
         rdeu = self.import_siif_rdeu012()
+        rdeu['mes'] = rdeu['fecha'].dt.strftime('%m/%Y')
         rdeu = rdeu >> \
-            dplyr.select(f.nro_comprobante, f.saldo, mes = f.mes_hasta) >> \
+            dplyr.select(f.nro_comprobante, f.saldo, f.mes) >> \
             dplyr.distinct(f.nro_comprobante, f.mes, _keep_all=True) >> \
             dplyr.inner_join(icaro) >> \
             dplyr.mutate(
@@ -122,7 +123,7 @@ class ImportDataFrame(HanglingPath):
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == ejercicio]
         # No estoy seguro del orden Desc o Asc
-        df.sort_values(by=['fecha_hasta'], inplace=True, ascending=False)
+        df.sort_values(by=['fecha_hasta'], inplace=True, ascending=True)
         self.siif_rdeu012 = df
         return self.siif_rdeu012
 
