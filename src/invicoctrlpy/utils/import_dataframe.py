@@ -5,7 +5,7 @@ import pandas as pd
 from datar import base, dplyr, f
 from invicodatpy.icaro.migrate_icaro import MigrateIcaro
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
-from invicodatpy.siif.all import (DeudaFlotanteRdeu012,
+from invicodatpy.siif.all import (ComprobantesRecRci02, DeudaFlotanteRdeu012,
                                   JoinComprobantesGtosGpoPart,
                                   PptoGtosFteRf602, ResumenFdosRfondo07tp)
 from invicodatpy.sscc.all import BancoINVICO, CtasCtes
@@ -26,6 +26,7 @@ class ImportDataFrame(HanglingPath):
     siif_rf602:pd.DataFrame = field(init=False, repr=False)
     siif_rfondo07tp:pd.DataFrame = field(init=False, repr=False)
     siif_comprobantes:pd.DataFrame = field(init=False, repr=False)
+    siif_rci02:pd.DataFrame = field(init=False, repr=False)
 
     # --------------------------------------------------
     def import_ctas_ctes(self) -> pd.DataFrame:
@@ -224,3 +225,11 @@ class ImportDataFrame(HanglingPath):
         df.drop(['map_to', 'siif_gastos_cta_cte'], axis='columns', inplace=True)
         self.siif_comprobantes = df
         return self.siif_comprobantes
+
+    # --------------------------------------------------
+    def import_siif_rci02(self, ejercicio:str = None):
+        df = ComprobantesRecRci02().from_sql(self.db_path + '/siif.sqlite')
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == self.ejercicio]
+        self.siif_rci02 = df
+        return self.siif_rci02
