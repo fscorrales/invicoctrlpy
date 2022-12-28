@@ -59,7 +59,6 @@ class ImportDataFrame(HanglingPath):
         icaro = icaro >> \
             dplyr.filter_(f.tipo != 'PA6')
         rdeu = self.import_siif_rdeu012()
-        rdeu['mes'] = rdeu['fecha'].dt.strftime('%m/%Y')
         rdeu = rdeu >> \
             dplyr.select(f.nro_comprobante, f.saldo, f.mes) >> \
             dplyr.distinct(f.nro_comprobante, f.mes, _keep_all=True) >> \
@@ -72,46 +71,46 @@ class ImportDataFrame(HanglingPath):
             dplyr.bind_rows(self.icaro) 
         self.icaro_neto_rdeu = pd.DataFrame(rdeu)
 
-        # Ajustamos la Deuda Flotante Pagada
-        rdeu = self.import_siif_rdeu012()
-        rdeu_lead = pd.DataFrame({'fecha_hasta':rdeu['fecha_hasta'].unique()})
-        rdeu = rdeu_lead >> \
-            dplyr.mutate(
-                lead_fecha_hasta = dplyr.lead(f.fecha_hasta, default=base.NA)
-            ) >> \
-            dplyr.right_join(rdeu, by='fecha_hasta') >> \
-            dplyr.filter_(~base.is_na(f.lead_fecha_hasta)) >> \
-            dplyr.rename(
-                fecha_borrar = 'fecha_hasta',
-                fecha_hasta = 'lead_fecha_hasta'
-            ) 
+        # # Ajustamos la Deuda Flotante Pagada
+        # rdeu = self.import_siif_rdeu012()
+        # rdeu_lead = pd.DataFrame({'fecha_hasta':rdeu['fecha_hasta'].unique()})
+        # rdeu = rdeu_lead >> \
+        #     dplyr.mutate(
+        #         lead_fecha_hasta = dplyr.lead(f.fecha_hasta, default=base.NA)
+        #     ) >> \
+        #     dplyr.right_join(rdeu, by='fecha_hasta') >> \
+        #     dplyr.filter_(~base.is_na(f.lead_fecha_hasta)) >> \
+        #     dplyr.rename(
+        #         fecha_borrar = 'fecha_hasta',
+        #         fecha_hasta = 'lead_fecha_hasta'
+        #     ) 
 
-        rdeu['mes_hasta'] = (rdeu['fecha_hasta'].dt.month.astype(str).str.zfill(2) + 
-                            '/' + rdeu['fecha_hasta'].dt.year.astype(str))
+        # rdeu['mes_hasta'] = (rdeu['fecha_hasta'].dt.month.astype(str).str.zfill(2) + 
+        #                     '/' + rdeu['fecha_hasta'].dt.year.astype(str))
 
-        rdeu = rdeu >> \
-            dplyr.anti_join(self.siif_rdeu012)
+        # rdeu = rdeu >> \
+        #     dplyr.anti_join(self.siif_rdeu012)
 
-        rdeu['ejercicio_ant'] = rdeu['fecha_borrar'].dt.year.astype(str)
-        rdeu['ejercicio'] = rdeu['fecha_hasta'].dt.year.astype(str)
+        # rdeu['ejercicio_ant'] = rdeu['fecha_borrar'].dt.year.astype(str)
+        # rdeu['ejercicio'] = rdeu['fecha_hasta'].dt.year.astype(str)
 
-        # Incorporamos los comprobantes de gastos pagados 
-        # en periodos posteriores (Deuda Flotante)
-        rdeu = rdeu >> \
-            dplyr.select(~f.fecha_borrar) >> \
-            dplyr.filter_(f.ejercicio == ejercicio) >> \
-            dplyr.semi_join(icaro, by='nro_comprobante') >> \
-            dplyr.mutate(
-                importe = f.saldo,
-                tipo = 'RDEU'
-            ) >> \
-            dplyr.select(
-                f.ejercicio, f.nro_comprobante, f.fuente,
-                f.cuit, f.cta_cte, f.tipo, f.importe,
-                fecha = f.fecha_hasta,
-                mes = f.mes_hasta
-            ) >> \
-            dplyr.bind_rows(self.icaro_neto_rdeu) 
+        # # Incorporamos los comprobantes de gastos pagados 
+        # # en periodos posteriores (Deuda Flotante)
+        # rdeu = rdeu >> \
+        #     dplyr.select(~f.fecha_borrar) >> \
+        #     dplyr.filter_(f.ejercicio == ejercicio) >> \
+        #     dplyr.semi_join(icaro, by='nro_comprobante') >> \
+        #     dplyr.mutate(
+        #         importe = f.saldo,
+        #         tipo = 'RDEU'
+        #     ) >> \
+        #     dplyr.select(
+        #         f.ejercicio, f.nro_comprobante, f.fuente,
+        #         f.cuit, f.cta_cte, f.tipo, f.importe,
+        #         fecha = f.fecha_hasta,
+        #         mes = f.mes_hasta
+        #     ) >> \
+        #     dplyr.bind_rows(self.icaro_neto_rdeu) 
         df = pd.DataFrame(rdeu)
         df = df.loc[df['ejercicio'] == ejercicio]
         self.icaro_neto_rdeu = df
