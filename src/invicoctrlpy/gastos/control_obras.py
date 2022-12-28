@@ -67,7 +67,7 @@ class ControlObras(ImportDataFrame):
     def import_dfs(self):
         self.import_ctas_ctes()
         self.import_icaro_neto_rdeu(self.ejercicio)
-        self.import_siif_rdeu012(self.ejercicio)
+        self.import_siif_rdeu012()
         self.import_icaro(self.ejercicio)
         self.import_resumen_rend_cuit()
 

@@ -71,12 +71,12 @@ class ImportDataFrame(HanglingPath):
             dplyr.bind_rows(self.icaro) 
         self.icaro_neto_rdeu = pd.DataFrame(rdeu)
 
-        # # Ajustamos la Deuda Flotante Pagada
-        # rdeu = self.import_siif_rdeu012()
+        # Ajustamos la Deuda Flotante Pagada
+        rdeu = self.import_siif_rdeu012()
         # rdeu_lead = pd.DataFrame({'fecha_hasta':rdeu['fecha_hasta'].unique()})
         # rdeu = rdeu_lead >> \
         #     dplyr.mutate(
-        #         lead_fecha_hasta = dplyr.lead(f.fecha_hasta, default=base.NA)
+        #         lead_fecha_hasta = dplyr.lag(f.fecha_hasta, default=base.NA)
         #     ) >> \
         #     dplyr.right_join(rdeu, by='fecha_hasta') >> \
         #     dplyr.filter_(~base.is_na(f.lead_fecha_hasta)) >> \
@@ -93,24 +93,43 @@ class ImportDataFrame(HanglingPath):
 
         # rdeu['ejercicio_ant'] = rdeu['fecha_borrar'].dt.year.astype(str)
         # rdeu['ejercicio'] = rdeu['fecha_hasta'].dt.year.astype(str)
+        rdeu = rdeu.drop_duplicates(subset=['nro_comprobante'], keep='last')
+        rdeu = rdeu >> \
+            dplyr.mutate(
+                lead_fecha_hasta = dplyr.lead(f.fecha_hasta, default=base.NA)
+            ) >> \
+            dplyr.filter_(~base.is_na(f.lead_fecha_hasta)) >> \
+            dplyr.rename(
+                fecha_borrar = 'fecha_hasta',
+                fecha_hasta = 'lead_fecha_hasta'
+            ) 
 
-        # # Incorporamos los comprobantes de gastos pagados 
-        # # en periodos posteriores (Deuda Flotante)
-        # rdeu = rdeu >> \
-        #     dplyr.select(~f.fecha_borrar) >> \
-        #     dplyr.filter_(f.ejercicio == ejercicio) >> \
-        #     dplyr.semi_join(icaro, by='nro_comprobante') >> \
-        #     dplyr.mutate(
-        #         importe = f.saldo,
-        #         tipo = 'RDEU'
-        #     ) >> \
-        #     dplyr.select(
-        #         f.ejercicio, f.nro_comprobante, f.fuente,
-        #         f.cuit, f.cta_cte, f.tipo, f.importe,
-        #         fecha = f.fecha_hasta,
-        #         mes = f.mes_hasta
-        #     ) >> \
-        #     dplyr.bind_rows(self.icaro_neto_rdeu) 
+        rdeu['mes_hasta'] = (rdeu['fecha_hasta'].dt.month.astype(str).str.zfill(2) + 
+                            '/' + rdeu['fecha_hasta'].dt.year.astype(str))
+
+        rdeu = rdeu >> \
+            dplyr.anti_join(self.siif_rdeu012)
+
+        rdeu['ejercicio_ant'] = rdeu['fecha_borrar'].dt.year.astype(str)
+        rdeu['ejercicio'] = rdeu['fecha_hasta'].dt.year.astype(str)
+
+        # Incorporamos los comprobantes de gastos pagados 
+        # en periodos posteriores (Deuda Flotante)
+        rdeu = rdeu >> \
+            dplyr.select(~f.fecha_borrar) >> \
+            dplyr.filter_(f.ejercicio == ejercicio) >> \
+            dplyr.semi_join(icaro, by='nro_comprobante') >> \
+            dplyr.mutate(
+                importe = f.saldo,
+                tipo = 'RDEU'
+            ) >> \
+            dplyr.select(
+                f.ejercicio, f.nro_comprobante, f.fuente,
+                f.cuit, f.cta_cte, f.tipo, f.importe,
+                fecha = f.fecha_hasta,
+                mes = f.mes_hasta
+            ) >> \
+            dplyr.bind_rows(self.icaro_neto_rdeu) 
         df = pd.DataFrame(rdeu)
         df = df.loc[df['ejercicio'] == ejercicio]
         self.icaro_neto_rdeu = df
@@ -121,6 +140,13 @@ class ImportDataFrame(HanglingPath):
         df = DeudaFlotanteRdeu012().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)
+        map_to = self.ctas_ctes.loc[:,['map_to', 'siif_contabilidad_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='siif_contabilidad_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'siif_contabilidad_cta_cte'], axis='columns', inplace=True)
         # No estoy seguro del orden Desc o Asc
         df.sort_values(by=['fecha_hasta'], inplace=True, ascending=True)
         self.siif_rdeu012 = df
