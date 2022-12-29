@@ -36,7 +36,8 @@ class ImportDataFrame(HanglingPath):
         return self.ctas_ctes
 
     # --------------------------------------------------
-    def import_icaro(self, ejercicio:str = None) -> pd.DataFrame:
+    def import_icaro(self, ejercicio:str = None, 
+                        neto_pa6:bool = False) -> pd.DataFrame:
         df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'carga')  
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == ejercicio]
@@ -48,6 +49,8 @@ class ImportDataFrame(HanglingPath):
             left_on='cta_cte', right_on='icaro_cta_cte')
         df['cta_cte'] = df['map_to']
         df.drop(['map_to', 'icaro_cta_cte'], axis='columns', inplace=True)
+        if neto_pa6:
+            df = df.loc[df['tipo'] != 'PA6']
         self.icaro = df
         return self.icaro
 
@@ -104,11 +107,13 @@ class ImportDataFrame(HanglingPath):
                 fecha_hasta = 'lead_fecha_hasta'
             ) 
 
+        # print(rdeu.loc[rdeu['nro_entrada'] == '2794'])
+
         rdeu['mes_hasta'] = (rdeu['fecha_hasta'].dt.month.astype(str).str.zfill(2) + 
                             '/' + rdeu['fecha_hasta'].dt.year.astype(str))
 
-        rdeu = rdeu >> \
-            dplyr.anti_join(self.siif_rdeu012)
+        # rdeu = rdeu >> \
+        #     dplyr.anti_join(self.icaro_neto_rdeu, by='nro_comprobante')
 
         rdeu['ejercicio_ant'] = rdeu['fecha_borrar'].dt.year.astype(str)
         rdeu['ejercicio'] = rdeu['fecha_hasta'].dt.year.astype(str)
@@ -118,14 +123,25 @@ class ImportDataFrame(HanglingPath):
         rdeu = rdeu >> \
             dplyr.select(~f.fecha_borrar) >> \
             dplyr.filter_(f.ejercicio == ejercicio) >> \
-            dplyr.semi_join(icaro, by='nro_comprobante') >> \
+            dplyr.left_join(
+                dplyr.select(self.import_icaro(neto_pa6=True),
+                    f.nro_comprobante, f.actividad, f.partida, 
+                    f.fondo_reparo, f.certificado, f.avance, 
+                    f.origen, f.obra
+                ),            
+                by='nro_comprobante'
+            ) >> \
             dplyr.mutate(
                 importe = f.saldo,
-                tipo = 'RDEU'
+                tipo = 'RDEU',
+                id = f.nro_comprobante
             ) >> \
+            dplyr.filter_(~base.is_na(f.actividad)) >> \
             dplyr.select(
                 f.ejercicio, f.nro_comprobante, f.fuente,
-                f.cuit, f.cta_cte, f.tipo, f.importe,
+                f.cuit, f.cta_cte, f.tipo, f.importe, f.id,
+                f.actividad, f.partida, f.fondo_reparo, 
+                f.certificado, f.avance, f.origen, f.obra,
                 fecha = f.fecha_hasta,
                 mes = f.mes_hasta
             ) >> \
