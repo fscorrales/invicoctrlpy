@@ -76,47 +76,11 @@ class ImportDataFrame(HanglingPath):
 
         # Ajustamos la Deuda Flotante Pagada
         rdeu = self.import_siif_rdeu012()
-        # rdeu_lead = pd.DataFrame({'fecha_hasta':rdeu['fecha_hasta'].unique()})
-        # rdeu = rdeu_lead >> \
-        #     dplyr.mutate(
-        #         lead_fecha_hasta = dplyr.lag(f.fecha_hasta, default=base.NA)
-        #     ) >> \
-        #     dplyr.right_join(rdeu, by='fecha_hasta') >> \
-        #     dplyr.filter_(~base.is_na(f.lead_fecha_hasta)) >> \
-        #     dplyr.rename(
-        #         fecha_borrar = 'fecha_hasta',
-        #         fecha_hasta = 'lead_fecha_hasta'
-        #     ) 
-
-        # rdeu['mes_hasta'] = (rdeu['fecha_hasta'].dt.month.astype(str).str.zfill(2) + 
-        #                     '/' + rdeu['fecha_hasta'].dt.year.astype(str))
-
-        # rdeu = rdeu >> \
-        #     dplyr.anti_join(self.siif_rdeu012)
-
-        # rdeu['ejercicio_ant'] = rdeu['fecha_borrar'].dt.year.astype(str)
-        # rdeu['ejercicio'] = rdeu['fecha_hasta'].dt.year.astype(str)
         rdeu = rdeu.drop_duplicates(subset=['nro_comprobante'], keep='last')
-        rdeu = rdeu >> \
-            dplyr.mutate(
-                lead_fecha_hasta = dplyr.lead(f.fecha_hasta, default=base.NA)
-            ) >> \
-            dplyr.filter_(~base.is_na(f.lead_fecha_hasta)) >> \
-            dplyr.rename(
-                fecha_borrar = 'fecha_hasta',
-                fecha_hasta = 'lead_fecha_hasta'
-            ) 
-
-        # print(rdeu.loc[rdeu['nro_entrada'] == '2794'])
-
-        rdeu['mes_hasta'] = (rdeu['fecha_hasta'].dt.month.astype(str).str.zfill(2) + 
-                            '/' + rdeu['fecha_hasta'].dt.year.astype(str))
-
-        # rdeu = rdeu >> \
-        #     dplyr.anti_join(self.icaro_neto_rdeu, by='nro_comprobante')
-
-        rdeu['ejercicio_ant'] = rdeu['fecha_borrar'].dt.year.astype(str)
-        rdeu['ejercicio'] = rdeu['fecha_hasta'].dt.year.astype(str)
+        rdeu['fecha_hasta'] = (rdeu['fecha_hasta']
+            + pd.tseries.offsets.DateOffset(months=1))
+        rdeu['mes_hasta'] = rdeu['fecha_hasta'].dt.strftime('%m/%Y')
+        rdeu['ejercicio'] = rdeu['mes_hasta'].str[-4:]
 
         # Incorporamos los comprobantes de gastos pagados 
         # en periodos posteriores (Deuda Flotante)

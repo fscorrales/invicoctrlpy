@@ -110,8 +110,8 @@ class ControlObras(ImportDataFrame):
             ) >> \
             dplyr.mutate(
                 diferencia = f.ejecutado_icaro - f.bruto_sgf
-            ) >> \
-            dplyr.filter_(~dplyr.near(f.diferencia, 0))
+            )
+        #     dplyr.filter_(~dplyr.near(f.diferencia, 0))
         control_mes_cta_cte.sort_values(by=['mes', 'cta_cte'], inplace= True)
         control_mes_cta_cte = pd.DataFrame(control_mes_cta_cte)
         control_mes_cta_cte.reset_index(drop=True, inplace=True)
