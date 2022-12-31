@@ -117,7 +117,7 @@ class IcaroVsSIIF(ImportDataFrame):
                 siif_tipo = f.clase_reg,
                 siif_fuente = f.fuente,
                 siif_importe = f.importe,
-                siif_fecha = f.fecha,
+                siif_mes = f.mes,
                 siif_cta_cte = f.cta_cte,
                 siif_cuit = f.cuit,
                 siif_partida = f.partida
@@ -130,17 +130,18 @@ class IcaroVsSIIF(ImportDataFrame):
                 icaro_tipo = f.tipo,
                 icaro_fuente = f.fuente,
                 icaro_importe = f.importe,
-                icaro_fecha = f.fecha,
+                icaro_mes = f.mes,
                 icaro_cta_cte = f.cta_cte,
                 icaro_cuit = f.cuit,
                 icaro_partida = f.partida
             )
         comprobantes = siif >> \
             dplyr.full_join(icaro, by={'siif_nro':'icaro_nro'}, keep=True) >> \
+            tidyr.replace_na(0) >> \
             dplyr.mutate(
                 err_nro = f.siif_nro != f.icaro_nro,
                 err_tipo = f.siif_tipo != f.icaro_tipo,
-                err_fecha = f.siif_fecha != f.icaro_fecha,
+                err_mes = f.siif_mes != f.icaro_mes,
                 err_partida = f.siif_partida != f.icaro_partida,
                 err_fuente = f.siif_fuente != f.icaro_fuente,
                 err_importe = ~dplyr.near(f.siif_importe - f.icaro_importe, 0),
@@ -152,13 +153,13 @@ class IcaroVsSIIF(ImportDataFrame):
                 f.siif_tipo, f.icaro_tipo, f.err_tipo,
                 f.siif_fuente, f.icaro_fuente, f.err_fuente,
                 f.siif_importe, f.icaro_importe, f.err_importe,
-                f.siif_fecha, f.icaro_fecha, f.err_fecha,
+                f.siif_mes, f.icaro_mes, f.err_mes,
                 f.siif_cta_cte, f.icaro_cta_cte, f.err_cta_cte,
                 f.siif_cuit, f.icaro_cuit, f.err_cuit,
                 f.siif_partida, f.icaro_partida, f.err_partida
             ) >> \
             dplyr.filter_(
-                f.err_nro | f.err_fecha | f.err_partida |
+                f.err_nro | f.err_mes | f.err_partida |
                 f.err_fuente | f.err_importe | f.err_cta_cte |
                 f.err_cuit) >> \
             dplyr.mutate(
@@ -172,7 +173,7 @@ class IcaroVsSIIF(ImportDataFrame):
         comprobantes.sort_values(
             by=['err_nro', 'err_fuente', 'err_importe', 
             'err_cta_cte', 'err_cuit', 'err_partida', 
-            'err_fecha'], ascending=False,
+            'err_mes'], ascending=False,
             inplace=True)
         comprobantes.reset_index(drop=True, inplace=True)
         return comprobantes
@@ -183,7 +184,7 @@ class IcaroVsSIIF(ImportDataFrame):
         siif_fdos = siif_fdos >> \
             dplyr.select(
                 siif_nro_fondo = f.nro_fondo,
-                siif_fecha_pa6 = f.fecha,
+                siif_mes_pa6 = f.mes,
                 siif_importe_pa6 = f.ingresos,
                 siif_saldo_pa6 = f.saldo
             )
@@ -199,13 +200,13 @@ class IcaroVsSIIF(ImportDataFrame):
                 siif_fuente =f.fuente, 
                 siif_nro_reg = f.nro_comprobante, 
                 siif_importe_reg = f.importe, 
-                siif_fecha_reg = f.fecha
+                siif_mes_reg = f.mes
             )
         
         icaro = self.icaro
         icaro = icaro >> \
             dplyr.select(
-                icaro_fecha = f.fecha,
+                icaro_mes = f.mes,
                 icaro_nro = f.nro_comprobante, 
                 icaro_tipo = f.tipo, 
                 icaro_importe = f.importe,
@@ -218,7 +219,7 @@ class IcaroVsSIIF(ImportDataFrame):
             dplyr.filter_(f.icaro_tipo == 'PA6') >> \
             dplyr.select(
                 icaro_nro_fondo = f.icaro_nro,
-                icaro_fecha_pa6 = f.icaro_fecha,
+                icaro_mes_pa6 = f.icaro_mes,
                 icaro_importe_pa6 = f.icaro_importe
             )
 
@@ -230,7 +231,7 @@ class IcaroVsSIIF(ImportDataFrame):
                 f.icaro_fuente,
                 f.icaro_tipo, 
                 icaro_nro_reg = f.icaro_nro,
-                icaro_fecha_reg = f.icaro_fecha,
+                icaro_mes_reg = f.icaro_mes,
                 icaro_importe_reg = f.icaro_importe,
             )
         
@@ -247,11 +248,12 @@ class IcaroVsSIIF(ImportDataFrame):
                 icaro_reg, by={'siif_nro_reg':'icaro_nro_reg'}, 
                 keep=False
             )  >> \
+            tidyr.replace_na(0) >> \
             dplyr.mutate(
                 err_nro_fondo = f.siif_nro_fondo != f.icaro_nro_fondo,
-                err_fecha_pa6 = f.siif_fecha_pa6 != f.icaro_fecha_pa6,
+                err_mes_pa6 = f.siif_mes_pa6 != f.icaro_mes_pa6,
                 err_importe_pa6 = ~dplyr.near(f.siif_importe_pa6 - f.icaro_importe_pa6, 0),
-                err_fecha_reg = f.siif_fecha_reg != f.icaro_fecha_reg,
+                err_mes_reg = f.siif_mes_reg != f.icaro_mes_reg,
                 err_importe_reg = ~dplyr.near(f.siif_importe_reg - f.icaro_importe_reg, 0),
                 err_tipo = f.siif_tipo != f.icaro_tipo,
                 err_fuente = f.siif_fuente != f.icaro_fuente,
@@ -260,9 +262,9 @@ class IcaroVsSIIF(ImportDataFrame):
             ) >>\
             dplyr.select(
                 f.siif_nro_fondo, f.icaro_nro_fondo, f.err_nro_fondo,
-                f.siif_fecha_pa6, f.icaro_fecha_pa6, f.err_fecha_pa6,
+                f.siif_mes_pa6, f.icaro_mes_pa6, f.err_mes_pa6,
                 f.siif_importe_pa6, f.icaro_importe_pa6, f.err_importe_pa6,
-                f.siif_fecha_reg, f.icaro_fecha_reg, f.err_fecha_reg,
+                f.siif_mes_reg, f.icaro_mes_reg, f.err_mes_reg,
                 f.siif_importe_reg, f.icaro_importe_reg, f.err_importe_reg,
                 f.siif_tipo, f.icaro_tipo, f.err_tipo,
                 f.siif_fuente, f.icaro_fuente, f.err_fuente,
@@ -270,8 +272,8 @@ class IcaroVsSIIF(ImportDataFrame):
                 f.siif_cuit, f.icaro_cuit, f.err_cuit
             ) >> \
             dplyr.filter_(
-                f.err_nro_fondo | f.err_fecha_pa6 | f.err_importe_pa6 |
-                f.err_fecha_reg | f.err_importe_reg |
+                f.err_nro_fondo | f.err_mes_pa6 | f.err_importe_pa6 |
+                f.err_mes_reg | f.err_importe_reg |
                 f.err_fuente | f.err_tipo | f.err_cta_cte |
                 f.err_cuit) >> \
             dplyr.mutate(
@@ -283,7 +285,7 @@ class IcaroVsSIIF(ImportDataFrame):
             by=['err_nro_fondo',
             'err_importe_pa6', 'err_importe_reg', 
             'err_fuente', 'err_cta_cte', 'err_cuit', 
-            'err_tipo', 'err_fecha_pa6', 'err_fecha_reg'], 
+            'err_tipo', 'err_mes_pa6', 'err_mes_reg'], 
             ascending=False, inplace=True)
         control_pa6.reset_index(drop=True, inplace=True)
         return control_pa6
