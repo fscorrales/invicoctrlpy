@@ -246,13 +246,14 @@ class IcaroVsSIIF(ImportDataFrame):
             ) >> \
             dplyr.left_join(
                 icaro_reg, by={'siif_nro_reg':'icaro_nro_reg'}, 
-                keep=False
+                keep=True
             )  >> \
             tidyr.replace_na(0) >> \
             dplyr.mutate(
                 err_nro_fondo = f.siif_nro_fondo != f.icaro_nro_fondo,
                 err_mes_pa6 = f.siif_mes_pa6 != f.icaro_mes_pa6,
                 err_importe_pa6 = ~dplyr.near(f.siif_importe_pa6 - f.icaro_importe_pa6, 0),
+                err_nro_reg = f.siif_nro_reg != f.icaro_nro_reg,
                 err_mes_reg = f.siif_mes_reg != f.icaro_mes_reg,
                 err_importe_reg = ~dplyr.near(f.siif_importe_reg - f.icaro_importe_reg, 0),
                 err_tipo = f.siif_tipo != f.icaro_tipo,
@@ -264,6 +265,7 @@ class IcaroVsSIIF(ImportDataFrame):
                 f.siif_nro_fondo, f.icaro_nro_fondo, f.err_nro_fondo,
                 f.siif_mes_pa6, f.icaro_mes_pa6, f.err_mes_pa6,
                 f.siif_importe_pa6, f.icaro_importe_pa6, f.err_importe_pa6,
+                f.siif_nro_reg, f.icaro_nro_reg, f.err_nro_reg,
                 f.siif_mes_reg, f.icaro_mes_reg, f.err_mes_reg,
                 f.siif_importe_reg, f.icaro_importe_reg, f.err_importe_reg,
                 f.siif_tipo, f.icaro_tipo, f.err_tipo,
@@ -273,7 +275,7 @@ class IcaroVsSIIF(ImportDataFrame):
             ) >> \
             dplyr.filter_(
                 f.err_nro_fondo | f.err_mes_pa6 | f.err_importe_pa6 |
-                f.err_mes_reg | f.err_importe_reg |
+                f.err_nro_reg | f.err_mes_reg | f.err_importe_reg |
                 f.err_fuente | f.err_tipo | f.err_cta_cte |
                 f.err_cuit) >> \
             dplyr.mutate(
@@ -282,8 +284,8 @@ class IcaroVsSIIF(ImportDataFrame):
 
         control_pa6 = pd.DataFrame(control_pa6)
         control_pa6.sort_values(
-            by=['err_nro_fondo',
-            'err_importe_pa6', 'err_importe_reg', 
+            by=['err_nro_fondo','err_importe_pa6', 
+            'err_nro_reg', 'err_importe_reg', 
             'err_fuente', 'err_cta_cte', 'err_cuit', 
             'err_tipo', 'err_mes_pa6', 'err_mes_reg'], 
             ascending=False, inplace=True)
