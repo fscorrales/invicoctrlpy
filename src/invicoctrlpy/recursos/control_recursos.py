@@ -3,7 +3,7 @@
 Author: Fernando Corrales <corrales_fernando@hotmail.com>
 Purpose: SIIF Recursos vs SSCC depósitos
 Data required:
-    - SIIF rci05
+    - SIIF rci02
     - SSCC Consulta General de Movimiento
     - SSCC ctas_ctes (manual data)
 Packages:
@@ -62,12 +62,17 @@ class ControlRecursos(ImportDataFrame):
     def import_banco_invico(self):
         df = super().import_banco_invico(self.ejercicio)
         df = df.loc[df['movimiento'] == 'DEPOSITO']
-        # keep = ['MACRO']
-        # df['cta_cte'].loc[df.glosa.str.contains('|'.join(keep))] = 'Macro'
+        dep_transf_int = ['034', '004']
+        dep_pf = ['214', '215']
+        dep_otros = ['003', '055', '005', '013']
+        dep_cert_neg = ['18']
+        df = df.loc[~df['cod_imputacion'].isin(
+            dep_transf_int + dep_pf + dep_otros + dep_cert_neg
+            )]
         df['grupo'] = np.where(df['cta_cte'] == '10270', 'FONAVI',
-                    np.where(df['cta_cte'].isin([
-                        "130832-12", "334", "Macro", "Patagonia"]), 'RECUPEROS', 
-                        'OTROS'))
+                        np.where(df['cta_cte'].isin([
+                            "130832-12", "334", "Macro", "Patagonia"]), 'RECUPEROS', 
+                            'OTROS'))
         df.reset_index(drop=True, inplace=True)
         self.sscc_banco_invico = df
         return self.sscc_banco_invico
@@ -75,6 +80,9 @@ class ControlRecursos(ImportDataFrame):
     # --------------------------------------------------
     def import_siif_rci02(self):
         df = super().import_siif_rci02(self.ejercicio)
+        df = df.loc[df['es_invico'] == False]
+        df = df.loc[df['es_remanente'] == False]
+        df = df.loc[df['es_verificado'] == True]
         keep = ['MACRO']
         df['cta_cte'].loc[df.glosa.str.contains('|'.join(keep))] = 'Macro'
         df['grupo'] = np.where(df['cta_cte'] == '10270', 'FONAVI',
@@ -85,37 +93,69 @@ class ControlRecursos(ImportDataFrame):
         self.siif_rci02 = df
         return self.siif_rci02
 
-    # # --------------------------------------------------
-    # def control_mes_cta_cte(self):
-    #     icaro_mes_cta_cte = self.icaro_neto_rdeu.copy()
-    #     icaro_mes_cta_cte = icaro_mes_cta_cte >> \
-    #         dplyr.select(f.mes, f.cta_cte, f.importe) >> \
-    #         dplyr.group_by(f.mes, f.cta_cte) >> \
-    #         dplyr.summarise(ejecutado_icaro = base.sum_(f.importe),
-    #                         _groups = 'drop')
-    #     sgf_mes_cta_cte = self.sgf_resumen_rend_cuit.copy()
-    #     sgf_mes_cta_cte = sgf_mes_cta_cte >> \
-    #         dplyr.select(
-    #             f.mes, f.cta_cte, 
-    #             f.importe_bruto
-    #         ) >> \
-    #         dplyr.group_by(f.mes, f.cta_cte) >> \
-    #         dplyr.summarise(
-    #             bruto_sgf = base.sum_(f.importe_bruto),
-    #             _groups = 'drop')
-    #     control_mes_cta_cte = icaro_mes_cta_cte >> \
-    #         dplyr.full_join(sgf_mes_cta_cte) >> \
-    #         dplyr.mutate(
-    #             dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-    #         ) >> \
-    #         dplyr.mutate(
-    #             diferencia = f.ejecutado_icaro - f.bruto_sgf
-    #         ) >> \
-    #         dplyr.filter_(~dplyr.near(f.diferencia, 0))
-    #     control_mes_cta_cte.sort_values(by=['mes', 'cta_cte'], inplace= True)
-    #     control_mes_cta_cte = pd.DataFrame(control_mes_cta_cte)
-    #     control_mes_cta_cte.reset_index(drop=True, inplace=True)
-    #     return control_mes_cta_cte
+    # --------------------------------------------------
+    def control_mes_grupo(self):
+        siif_mes_gpo = self.siif_rci02.copy()
+        siif_mes_gpo = siif_mes_gpo >> \
+            dplyr.select(f.mes, f.grupo, f.importe) >> \
+            dplyr.group_by(f.mes, f.grupo) >> \
+            dplyr.summarise(recursos_siif = base.sum_(f.importe),
+                            _groups = 'drop')
+        sscc_mes_gpo = self.sscc_banco_invico.copy()
+        sscc_mes_gpo = sscc_mes_gpo >> \
+            dplyr.select(
+                f.mes, f.grupo, 
+                f.importe
+            ) >> \
+            dplyr.group_by(f.mes, f.grupo) >> \
+            dplyr.summarise(
+                depositos_sscc = base.sum_(f.importe),
+                _groups = 'drop')
+        control_mes_gpo = siif_mes_gpo >> \
+            dplyr.full_join(sscc_mes_gpo) >> \
+            dplyr.mutate(
+                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+            ) >> \
+            dplyr.mutate(
+                diferencia = f.recursos_siif - f.depositos_sscc
+            )
+            # dplyr.filter_(~dplyr.near(f.diferencia, 0))
+        control_mes_gpo.sort_values(by=['mes', 'grupo'], inplace= True)
+        control_mes_gpo = pd.DataFrame(control_mes_gpo)
+        control_mes_gpo.reset_index(drop=True, inplace=True)
+        return control_mes_gpo
+
+    # --------------------------------------------------
+    def control_mes_grupo_cta_cte(self):
+        siif_mes_gpo_cta_cte = self.siif_rci02.copy()
+        siif_mes_gpo_cta_cte = siif_mes_gpo_cta_cte >> \
+            dplyr.select(f.mes, f.grupo, f.cta_cte, f.importe) >> \
+            dplyr.group_by(f.mes, f.grupo, f.cta_cte) >> \
+            dplyr.summarise(recursos_siif = base.sum_(f.importe),
+                            _groups = 'drop')
+        sscc_mes_gpo_cta_cte = self.sscc_banco_invico.copy()
+        sscc_mes_gpo_cta_cte = sscc_mes_gpo_cta_cte >> \
+            dplyr.select(
+                f.mes, f.grupo, f.cta_cte,
+                f.importe
+            ) >> \
+            dplyr.group_by(f.mes, f.grupo, f.cta_cte) >> \
+            dplyr.summarise(
+                depositos_sscc = base.sum_(f.importe),
+                _groups = 'drop')
+        control_mes_gpo_cta_cte = siif_mes_gpo_cta_cte >> \
+            dplyr.full_join(sscc_mes_gpo_cta_cte) >> \
+            dplyr.mutate(
+                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+            ) >> \
+            dplyr.mutate(
+                diferencia = f.recursos_siif - f.depositos_sscc
+            )
+            # dplyr.filter_(~dplyr.near(f.diferencia, 0))
+        control_mes_gpo_cta_cte.sort_values(by=['mes', 'grupo', 'cta_cte'], inplace= True)
+        control_mes_gpo_cta_cte = pd.DataFrame(control_mes_gpo_cta_cte)
+        control_mes_gpo_cta_cte.reset_index(drop=True, inplace=True)
+        return control_mes_gpo_cta_cte
 
     # # --------------------------------------------------
     # def control_completo(self):
