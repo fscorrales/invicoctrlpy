@@ -37,7 +37,8 @@ class ImportDataFrame(HanglingPath):
 
     # --------------------------------------------------
     def import_icaro(self, ejercicio:str = None, 
-                        neto_pa6:bool = False) -> pd.DataFrame:
+                        neto_pa6:bool = False,
+                        neto_reg:bool = False) -> pd.DataFrame:
         df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'carga')  
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == ejercicio]
@@ -51,16 +52,18 @@ class ImportDataFrame(HanglingPath):
         df.drop(['map_to', 'icaro_cta_cte'], axis='columns', inplace=True)
         if neto_pa6:
             df = df.loc[df['tipo'] != 'PA6']
+        if neto_reg:
+            df = df.loc[df['tipo'] != 'REG']
         self.icaro = df
         return self.icaro
 
     # --------------------------------------------------
     def import_icaro_neto_rdeu(self, ejercicio:str) -> pd.DataFrame:
         #Neteamos los comprobantes de gastos no pagados (Deuda Flotante)
-        icaro = self.import_icaro()
-        icaro = icaro.loc[icaro['tipo'] != 'REG']
-        icaro = icaro >> \
-            dplyr.filter_(f.tipo != 'PA6')
+        icaro = self.import_icaro(neto_pa6=True, neto_reg=True)
+        # icaro = icaro.loc[~icaro['tipo'].isin(['REG', 'PA6'])]
+        # icaro = icaro >> \
+        #     dplyr.filter_(f.tipo != 'PA6')
         rdeu = self.import_siif_rdeu012()
         rdeu = rdeu >> \
             dplyr.select(f.nro_comprobante, f.saldo, f.mes) >> \
@@ -71,7 +74,11 @@ class ImportDataFrame(HanglingPath):
                 tipo = 'RDEU'
             )  >> \
             dplyr.select(~f.saldo) >> \
-            dplyr.bind_rows(self.icaro) 
+            dplyr.bind_rows(icaro)
+        icaro = self.import_icaro()
+        icaro = icaro.loc[icaro['tipo'].isin(['PA6'])]
+        rdeu = rdeu >> \
+            dplyr.bind_rows(icaro)
         self.icaro_neto_rdeu = pd.DataFrame(rdeu)
 
         # Ajustamos la Deuda Flotante Pagada
@@ -88,7 +95,7 @@ class ImportDataFrame(HanglingPath):
             dplyr.select(~f.fecha_borrar) >> \
             dplyr.filter_(f.ejercicio == ejercicio) >> \
             dplyr.left_join(
-                dplyr.select(self.import_icaro(neto_pa6=True),
+                dplyr.select(self.import_icaro(neto_pa6=True, neto_reg=True),
                     f.nro_comprobante, f.actividad, f.partida, 
                     f.fondo_reparo, f.certificado, f.avance, 
                     f.origen, f.obra
