@@ -171,6 +171,20 @@ class ImportDataFrame(HanglingPath):
         self.siif_comprobantes = df
         return self.siif_comprobantes
 
+    def import_siif_comprobantes_haberes(
+        self, ejercicio:str = None, neto_art:bool = False
+        ):
+        self.import_siif_comprobantes()
+        df = self.siif_comprobantes.copy()
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == self.ejercicio]
+        #df = df[df['grupo'] == '100']
+        df = df[df['cta_cte'] == '130832-04']
+        if neto_art:
+            df = df.loc[~df['partida'].isin(['150', '151'])]
+        self.siif_comprobantes_haberes = df
+        return self.siif_comprobantes_haberes
+
     # --------------------------------------------------
     def import_siif_rci02(self, ejercicio:str = None):
         df = ComprobantesRecRci02().from_sql(self.db_path + '/siif.sqlite')
