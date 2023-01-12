@@ -221,7 +221,8 @@ class ImportDataFrame(HanglingPath):
         return self.sgf_resumen_rend
 
     # --------------------------------------------------
-    def import_resumen_rend_cuit(self, ejercicio:str = None) -> pd.DataFrame:
+    def import_resumen_rend_cuit(
+        self, ejercicio:str = None, neto_cert_neg:bool=False) -> pd.DataFrame:
         df = JoinResumenRendProvCuit().from_sql(self.db_path + '/sgf.sqlite')  
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == ejercicio]
@@ -244,6 +245,29 @@ class ImportDataFrame(HanglingPath):
         df = df >> \
             dplyr.filter_(f.cta_cte != '106') >> \
             dplyr.bind_rows(df_106)
+        if neto_cert_neg:
+            self.import_banco_invico(ejercicio=ejercicio)
+            banco_invico = self.sscc_banco_invico.copy()
+            banco_invico = banco_invico >> \
+                dplyr.filter_(f.cod_imputacion == '018') >> \
+                dplyr.filter_(f.es_cheque == False) >> \
+                dplyr.filter_(f.movimiento == 'DEPOSITO') >> \
+                dplyr.mutate(
+                    origen = 'BANCO',
+                    cuit = '30632351514',
+                    beneficiario = f.concepto,
+                    destino = f.imputacion,
+                    importe_bruto = f.importe * (-1),
+                    importe_neto = f.importe_bruto
+                ) >> \
+                dplyr.select(
+                    f.ejercicio, f.mes, f.fecha, f.cta_cte,
+                    f.origen, f.cuit, f.beneficiario,
+                    f.movimiento, f.destino, 
+                    f.importe_bruto, f.importe_neto
+                )
+            df = df >> \
+                dplyr.bind_rows(banco_invico, _copy=False)
         self.sgf_resumen_rend_cuit = pd.DataFrame(df)
         return self.sgf_resumen_rend_cuit
 

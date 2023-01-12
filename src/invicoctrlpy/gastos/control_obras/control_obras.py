@@ -7,6 +7,7 @@ Data required:
     - SIIF rdeu012
     - SGF Resumen de Rendiciones por Proveedor
     - SGF Listado Proveedores
+    - SSCC Resumen General de Movimientos
     - SSCC ctas_ctes (manual data)
 Packages:
  - invicodatpy (pip install '/home/kanou/IT/R Apps/R Gestion INVICO/invicodatpy')
@@ -62,6 +63,7 @@ class ControlObras(ImportDataFrame):
             update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
             self.db_path + '/sscc.sqlite')
         update_sscc.update_ctas_ctes()
+        update_sscc.update_banco_invico()
 
     # --------------------------------------------------
     def import_dfs(self):
@@ -73,7 +75,8 @@ class ControlObras(ImportDataFrame):
 
     # --------------------------------------------------
     def import_resumen_rend_cuit(self):
-        df = super().import_resumen_rend_cuit(self.ejercicio)
+        df = super().import_resumen_rend_cuit(
+            self.ejercicio, neto_cert_neg=True)
         df = df.loc[df['origen'] != 'FUNCIONAMIENTO']
         #Filtramos los registros de honorarios en EPAM
         df_epam = df.copy()
