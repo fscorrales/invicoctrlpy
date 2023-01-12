@@ -62,7 +62,7 @@ class ControlHaberes(ImportDataFrame):
         self.import_ctas_ctes()
         #self.import_siif_comoprobantes_neto_rdeu(self.ejercicio)
         self.import_siif_comprobantes_haberes(
-            self.ejercicio, neto_art=True)
+            self.ejercicio, neto_art=True, neto_gcias_310=True)
         self.import_siif_rdeu012()
         self.import_banco_invico()
 

@@ -7,7 +7,8 @@ from invicodatpy.icaro.migrate_icaro import MigrateIcaro
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
 from invicodatpy.siif.all import (ComprobantesRecRci02, DeudaFlotanteRdeu012,
                                   JoinComprobantesGtosGpoPart,
-                                  PptoGtosFteRf602, ResumenFdosRfondo07tp)
+                                  MayorContableRcocc31, PptoGtosFteRf602,
+                                  ResumenFdosRfondo07tp)
 from invicodatpy.sscc.all import BancoINVICO, CtasCtes
 
 from .hangling_path import HanglingPath
@@ -23,7 +24,9 @@ class ImportDataFrame(HanglingPath):
     siif_rf602:pd.DataFrame = field(init=False, repr=False)
     siif_rfondo07tp:pd.DataFrame = field(init=False, repr=False)
     siif_comprobantes:pd.DataFrame = field(init=False, repr=False)
+    siif_comprobantes_haberes:pd.DataFrame = field(init=False, repr=False)
     siif_rci02:pd.DataFrame = field(init=False, repr=False)
+    siif_rcocc31:pd.DataFrame = field(init=False, repr=False)
     sgf_resumen_rend_cuit:pd.DataFrame = field(init=False, repr=False)
     sgf_resumen_rend:pd.DataFrame = field(init=False, repr=False)
     sscc_banco_invico:pd.DataFrame = field(init=False, repr=False)
@@ -140,7 +143,7 @@ class ImportDataFrame(HanglingPath):
         return self.siif_rdeu012
 
     # --------------------------------------------------
-    def import_siif_rf602(self, ejercicio:str = None):
+    def import_siif_rf602(self, ejercicio:str = None) -> pd.DataFrame:
         df = PptoGtosFteRf602().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == self.ejercicio]
@@ -148,7 +151,7 @@ class ImportDataFrame(HanglingPath):
         return self.siif_rf602
 
     # --------------------------------------------------
-    def import_siif_rfondo07tp_pa6(self, ejercicio:str = None):
+    def import_siif_rfondo07tp_pa6(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenFdosRfondo07tp().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == self.ejercicio]
@@ -156,7 +159,7 @@ class ImportDataFrame(HanglingPath):
         self.siif_rfondo07tp = df
         return self.siif_rfondo07tp
 
-    def import_siif_comprobantes(self, ejercicio:str = None):
+    def import_siif_comprobantes(self, ejercicio:str = None) -> pd.DataFrame:
         df = JoinComprobantesGtosGpoPart().from_sql(
             self.db_path + '/siif.sqlite')
         if ejercicio != None:
@@ -172,21 +175,45 @@ class ImportDataFrame(HanglingPath):
         return self.siif_comprobantes
 
     def import_siif_comprobantes_haberes(
-        self, ejercicio:str = None, neto_art:bool = False
-        ):
-        self.import_siif_comprobantes()
+        self, ejercicio:str = None, neto_art:bool = False,
+        neto_gcias_310:bool = False
+        ) -> pd.DataFrame:
+        self.import_siif_comprobantes(ejercicio=ejercicio)
         df = self.siif_comprobantes.copy()
-        if ejercicio != None:
-            df = df.loc[df['ejercicio'] == self.ejercicio]
         #df = df[df['grupo'] == '100']
         df = df[df['cta_cte'] == '130832-04']
         if neto_art:
             df = df.loc[~df['partida'].isin(['150', '151'])]
-        self.siif_comprobantes_haberes = df
+        if neto_gcias_310:
+            self.import_siif_rcocc31(
+                ejercicio=ejercicio, cta_contable='2122-1-2'
+            )
+            gcias_310 = self.siif_rcocc31.copy()
+            gcias_310 = gcias_310[gcias_310['tipo_comprobante'] != 'APE']
+            gcias_310 = gcias_310[gcias_310['auxiliar_1'].isin(['245', '310'])]
+            gcias_310 = gcias_310 >> \
+                dplyr.mutate(
+                    importe = f.creditos * (-1),
+                    cuit = '30632351514',
+                    es_comprometido = True,
+                    es_verificado = True,
+                    es_aprobado = True,
+                    es_pagado = True,
+                ) >> \
+                dplyr.select(
+                    f.ejercicio, f.mes, f.fecha,
+                    f.importe, f.cuit,
+                    f.es_comprometido, f.es_verificado,
+                    f.es_aprobado, f.es_pagado
+                )
+            print(gcias_310)
+            df = df >> \
+                dplyr.bind_rows(gcias_310)
+        self.siif_comprobantes_haberes = pd.DataFrame(df)
         return self.siif_comprobantes_haberes
 
     # --------------------------------------------------
-    def import_siif_rci02(self, ejercicio:str = None):
+    def import_siif_rci02(self, ejercicio:str = None) -> pd.DataFrame:
         df = ComprobantesRecRci02().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == self.ejercicio]
@@ -194,7 +221,25 @@ class ImportDataFrame(HanglingPath):
         return self.siif_rci02
 
     # --------------------------------------------------
-    def import_resumen_rend(self, ejercicio:str = None):
+    def import_siif_rcocc31(
+        self, ejercicio:str = None, cta_contable:str = None) -> pd.DataFrame:
+        df = MayorContableRcocc31().from_sql(self.db_path + '/siif.sqlite')
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == ejercicio]
+        if cta_contable != None:
+            df = df.loc[df['cta_contable'] == cta_contable]
+        df.reset_index(drop=True, inplace=True)
+        # map_to = self.ctas_ctes.loc[:,['map_to', 'siif_contabilidad_cta_cte']]
+        # df = pd.merge(
+        #     df, map_to, how='left',
+        #     left_on='cta_cte', right_on='siif_contabilidad_cta_cte')
+        # df['cta_cte'] = df['map_to']
+        # df.drop(['map_to', 'siif_contabilidad_cta_cte'], axis='columns', inplace=True)
+        self.siif_rcocc31 = df
+        return self.siif_rcocc31
+
+    # --------------------------------------------------
+    def import_resumen_rend(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenRendProv().from_sql(self.db_path + '/sgf.sqlite')  
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == ejercicio]
@@ -272,7 +317,7 @@ class ImportDataFrame(HanglingPath):
         return self.sgf_resumen_rend_cuit
 
     # --------------------------------------------------
-    def import_banco_invico(self, ejercicio:str = None):
+    def import_banco_invico(self, ejercicio:str = None) -> pd.DataFrame:
         df = BancoINVICO().from_sql(self.db_path + '/sscc.sqlite')
         if ejercicio != None:  
             df = df.loc[df['ejercicio'] == ejercicio]
