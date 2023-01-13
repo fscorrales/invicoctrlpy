@@ -192,23 +192,34 @@ class ImportDataFrame(HanglingPath):
             gcias_310 = gcias_310[gcias_310['tipo_comprobante'] != 'APE']
             gcias_310 = gcias_310[gcias_310['auxiliar_1'].isin(['245', '310'])]
             gcias_310 = gcias_310 >> \
-                dplyr.mutate(
+                dplyr.transmute(
+                    ejercicio = f.ejercicio,
+                    mes = f.mes,
+                    fecha = f.fecha,
+                    nro_comprobante = f.nro_entrada.str.zfill(5) + '/' + ejercicio[-2:],
                     importe = f.creditos * (-1),
+                    grupo = '100',
+                    partida = f.auxiliar_1,
+                    nro_entrada = f.nro_entrada,
+                    nro_origen = f.nro_entrada,
+                    nro_expte = '90000000' + ejercicio,
+                    glosa = dplyr.if_else(f.auxiliar_1 == '245',
+                    'RET. GCIAS. 4TA CATEGORÍA', 'HABERES ERRONEOS COD 310'),
+                    beneficiario = 'INSTITUTO DE VIVIENDA DE CORRIENTES',
+                    nro_fondo = None,
+                    fuente = '11',
+                    cta_cte = '130832-04',
                     cuit = '30632351514',
+                    clase_reg = 'CYO',
+                    clase_mod = 'NOR',
+                    clase_gto = 'REM',
                     es_comprometido = True,
                     es_verificado = True,
                     es_aprobado = True,
-                    es_pagado = True,
-                ) >> \
-                dplyr.select(
-                    f.ejercicio, f.mes, f.fecha,
-                    f.importe, f.cuit,
-                    f.es_comprometido, f.es_verificado,
-                    f.es_aprobado, f.es_pagado
+                    es_pagado = True
                 )
-            print(gcias_310)
-            df = df >> \
-                dplyr.bind_rows(gcias_310)
+            gcias_310 = pd.DataFrame(gcias_310)
+            df = pd.concat([df, gcias_310])
         self.siif_comprobantes_haberes = pd.DataFrame(df)
         return self.siif_comprobantes_haberes
 
