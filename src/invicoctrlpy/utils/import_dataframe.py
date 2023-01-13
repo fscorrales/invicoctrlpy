@@ -25,6 +25,7 @@ class ImportDataFrame(HanglingPath):
     siif_rfondo07tp:pd.DataFrame = field(init=False, repr=False)
     siif_comprobantes:pd.DataFrame = field(init=False, repr=False)
     siif_comprobantes_haberes:pd.DataFrame = field(init=False, repr=False)
+    siif_comprobantes_haberes_neto_rdeu:pd.DataFrame = field(init=False, repr=False)
     siif_rci02:pd.DataFrame = field(init=False, repr=False)
     siif_rcocc31:pd.DataFrame = field(init=False, repr=False)
     sgf_resumen_rend_cuit:pd.DataFrame = field(init=False, repr=False)
@@ -95,7 +96,6 @@ class ImportDataFrame(HanglingPath):
         # Incorporamos los comprobantes de gastos pagados 
         # en periodos posteriores (Deuda Flotante)
         rdeu = rdeu >> \
-            dplyr.select(~f.fecha_borrar) >> \
             dplyr.filter_(f.ejercicio == ejercicio) >> \
             dplyr.left_join(
                 dplyr.select(self.import_icaro(neto_pa6=True, neto_reg=True),
@@ -222,6 +222,73 @@ class ImportDataFrame(HanglingPath):
             df = pd.concat([df, gcias_310])
         self.siif_comprobantes_haberes = pd.DataFrame(df)
         return self.siif_comprobantes_haberes
+
+    # --------------------------------------------------
+    def import_siif_comprobantes_haberes_neto_rdeu(
+        self, ejercicio:str, neto_art:bool = False,
+        neto_gcias_310:bool = False) -> pd.DataFrame:
+        #Neteamos los comprobantes de gastos no pagados (Deuda Flotante)
+        self.import_siif_comprobantes_haberes(
+            ejercicio=ejercicio, neto_art=neto_art, neto_gcias_310=neto_gcias_310)
+        comprobantes_haberes = self.siif_comprobantes_haberes.copy()
+        rdeu = self.import_siif_rdeu012()
+        rdeu = rdeu >> \
+            dplyr.select(
+                ~f.mes_hasta, ~f.fecha_aprobado, ~f.fecha_desde, 
+                ~f.fecha_hasta, ~f.org_fin) >> \
+            dplyr.distinct(f.nro_comprobante, f.mes, _keep_all=True) >> \
+            dplyr.semi_join(comprobantes_haberes, by=f.nro_comprobante) >> \
+            dplyr.distinct(f.nro_comprobante, f.mes, f.saldo, _keep_all=True) >> \
+            dplyr.mutate(
+                importe = f.saldo * (-1),
+                clase_reg = 'CYO',
+                clase_mod = 'NOR',
+                clase_gto = 'RDEU',
+                es_comprometido = True,
+                es_verificado = True,
+                es_aprobado = True,
+                es_pagado = False
+            )  >> \
+            dplyr.select(~f.saldo)
+        self.siif_comprobantes_haberes_neto_rdeu = pd.concat(
+            [comprobantes_haberes, rdeu])
+
+        # Ajustamos la Deuda Flotante Pagada
+        rdeu = self.import_siif_rdeu012()
+        rdeu = rdeu.drop_duplicates(subset=['nro_comprobante'], keep='last')
+        rdeu['fecha_hasta'] = (rdeu['fecha_hasta']
+            + pd.tseries.offsets.DateOffset(months=1))
+        rdeu['mes_hasta'] = rdeu['fecha_hasta'].dt.strftime('%m/%Y')
+        rdeu['ejercicio'] = rdeu['mes_hasta'].str[-4:]
+
+        # Incorporamos los comprobantes de gastos pagados 
+        # en periodos posteriores (Deuda Flotante)
+        rdeu = rdeu >> \
+            dplyr.filter_(f.ejercicio == ejercicio) >> \
+            dplyr.mutate(
+                fecha = f.fecha_hasta, mes = f.mes_hasta
+            ) >> \
+            dplyr.select(
+                ~f.mes_hasta, ~f.fecha_aprobado, ~f.fecha_desde, 
+                ~f.fecha_hasta, ~f.org_fin) >> \
+            dplyr.semi_join(comprobantes_haberes, by=f.nro_comprobante) >> \
+            dplyr.distinct(f.nro_comprobante, f.mes, f.saldo, _keep_all=True) >> \
+            dplyr.mutate(
+                importe = f.saldo,
+                clase_reg = 'CYO',
+                clase_mod = 'NOR',
+                clase_gto = 'RDEU',
+                es_comprometido = True,
+                es_verificado = True,
+                es_aprobado = True,
+                es_pagado = True
+            ) >> \
+            dplyr.select(~f.saldo)
+        rdeu = pd.DataFrame(rdeu)
+        rdeu = rdeu.loc[rdeu['ejercicio'] == ejercicio]
+        self.siif_comprobantes_haberes_neto_rdeu = pd.concat(
+            [self.siif_comprobantes_haberes_neto_rdeu, rdeu])
+        return self.siif_comprobantes_haberes_neto_rdeu
 
     # --------------------------------------------------
     def import_siif_rci02(self, ejercicio:str = None) -> pd.DataFrame:
