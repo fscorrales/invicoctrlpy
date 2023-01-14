@@ -66,6 +66,14 @@ class ControlHaberes(ImportDataFrame):
         self.import_banco_invico()
 
     # --------------------------------------------------
+    def import_siif_rdeu012(self):
+        df = super().import_siif_rdeu012()
+        cyo_rdeu = self.siif_comprobantes_haberes['nro_comprobante'].unique()
+        df = df.loc[df['nro_comprobante'].isin(cyo_rdeu)]
+        self.siif_rdeu012 = df
+        return self.siif_rdeu012
+
+    # --------------------------------------------------
     def import_banco_invico(self):
         df = super().import_banco_invico(self.ejercicio)
         df = df.loc[df['movimiento'] != 'DEPOSITO']
@@ -73,84 +81,74 @@ class ControlHaberes(ImportDataFrame):
         keep = ['GCIAS', 'GANANCIAS']
         df = df.loc[~df.concepto.str.contains('|'.join(keep))]
         df['importe'] = df['importe'] * (-1)
+        dep_transf_int = ['034', '004']
+        dep_otros = ['003', '055', '005', '013']
+        df = df.loc[~df['cod_imputacion'].isin(
+            dep_transf_int + dep_otros
+            )]
         df.reset_index(drop=True, inplace=True)
         self.sscc_banco_invico = df
         return self.sscc_banco_invico
 
-    # # --------------------------------------------------
-    # def control_mes_cta_cte(self):
-    #     icaro_mes_cta_cte = self.icaro_neto_rdeu.copy()
-    #     icaro_mes_cta_cte = icaro_mes_cta_cte >> \
-    #         dplyr.select(f.mes, f.cta_cte, f.importe) >> \
-    #         dplyr.group_by(f.mes, f.cta_cte) >> \
-    #         dplyr.summarise(ejecutado_icaro = base.sum_(f.importe),
-    #                         _groups = 'drop')
-    #     sgf_mes_cta_cte = self.sgf_resumen_rend_cuit.copy()
-    #     sgf_mes_cta_cte = sgf_mes_cta_cte >> \
-    #         dplyr.select(
-    #             f.mes, f.cta_cte, 
-    #             f.importe_bruto
-    #         ) >> \
-    #         dplyr.group_by(f.mes, f.cta_cte) >> \
-    #         dplyr.summarise(
-    #             bruto_sgf = base.sum_(f.importe_bruto),
-    #             _groups = 'drop')
-    #     control_mes_cta_cte = icaro_mes_cta_cte >> \
-    #         dplyr.full_join(sgf_mes_cta_cte) >> \
-    #         dplyr.mutate(
-    #             dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-    #         ) >> \
-    #         dplyr.mutate(
-    #             diferencia = f.ejecutado_icaro - f.bruto_sgf
-    #         )
-    #     #     dplyr.filter_(~dplyr.near(f.diferencia, 0))
-    #     control_mes_cta_cte.sort_values(by=['mes', 'cta_cte'], inplace= True)
-    #     control_mes_cta_cte = pd.DataFrame(control_mes_cta_cte)
-    #     control_mes_cta_cte.reset_index(drop=True, inplace=True)
-    #     return control_mes_cta_cte
+    # --------------------------------------------------
+    def control_mes(self):
+        siif_haberes_mes = self.siif_comprobantes_haberes_neto_rdeu.copy()
+        siif_haberes_mes = siif_haberes_mes >> \
+            dplyr.select(f.mes, f.importe) >> \
+            dplyr.group_by(f.mes) >> \
+            dplyr.summarise(ejecutado_siif = base.sum_(f.importe),
+                            _groups = 'drop')
+        sscc_mes = self.sscc_banco_invico.copy()
+        sscc_mes = sscc_mes >> \
+            dplyr.select(
+                f.mes, f.importe
+            ) >> \
+            dplyr.group_by(f.mes) >> \
+            dplyr.summarise(
+                pagado_sscc = base.sum_(f.importe),
+                _groups = 'drop')
+        control_mes = siif_haberes_mes >> \
+            dplyr.full_join(sscc_mes) >> \
+            dplyr.mutate(
+                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+            ) >> \
+            dplyr.mutate(
+                diferencia = f.ejecutado_siif- f.pagado_sscc
+            )
+        #     dplyr.filter_(~dplyr.near(f.diferencia, 0))
+        control_mes.sort_values(by=['mes'], inplace= True)
+        control_mes = pd.DataFrame(control_mes)
+        control_mes['dif_acum'] = control_mes['diferencia'].cumsum()
+        control_mes.reset_index(drop=True, inplace=True)
+        return control_mes
 
-    # # --------------------------------------------------
-    # def control_completo(self):
-    #     icaro_completo = self.icaro_neto_rdeu.copy()
-    #     icaro_completo = icaro_completo >> \
-    #         dplyr.rename_with(lambda x: 'icaro_' + x) >> \
-    #         dplyr.rename(
-    #             ejercicio = f.icaro_ejercicio,
-    #             mes = f.icaro_mes,
-    #             fecha = f.icaro_fecha,
-    #             cta_cte = f.icaro_cta_cte,
-    #             cuit = f.icaro_cuit,
-    #         )
-    #     sgf_completo = self.sgf_resumen_rend_cuit.copy()
-    #     sgf_completo = sgf_completo >> \
-    #         dplyr.rename_with(lambda x: 'sgf_' + x) >> \
-    #         dplyr.rename(
-    #             ejercicio = f.sgf_ejercicio,
-    #             mes = f.sgf_mes,
-    #             fecha = f.sgf_fecha,
-    #             cta_cte = f.sgf_cta_cte,
-    #             cuit = f.sgf_cuit,
-    #         )
-    #         # dplyr.select(
-    #         #     f.mes, f.fecha, f.cta_cte, 
-    #         #     f.beneficiario, 
-    #         #     libramiento = f.libramiento_sgf,
-    #         #     neto_sgf = f.importe_neto, 
-    #         #     retenciones_sgf = f.retenciones,
-    #         # )
-    #     control_completo = sgf_completo >> \
-    #         dplyr.full_join(icaro_completo) >> \
-    #         dplyr.mutate(
-    #             dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-    #         ) >> \
-    #         dplyr.mutate(
-    #             diferencia = f.icaro_importe - f.sgf_importe_bruto
-    #         )
-    #     control_completo.sort_values(
-    #         by=['mes', 'fecha','cta_cte', 'cuit'], 
-    #         inplace= True)
-    #     control_completo = pd.DataFrame(control_completo)
-    #     control_completo.reset_index(drop=True, inplace=True)
-    #     return control_completo
-
-# Ajuste Reemplazo de Chq y Cert Neg???
+    # --------------------------------------------------
+    def control_completo(self):
+        siif = self.siif_comprobantes_haberes_neto_rdeu.copy()
+        siif = siif >> \
+            dplyr.rename_with(lambda x: 'siif_' + x) >> \
+            dplyr.rename(
+                ejercicio = f.siif_ejercicio,
+                mes = f.siif_mes
+            )
+        sscc = self.sscc_banco_invico.copy()
+        sscc = sscc >> \
+            dplyr.rename_with(lambda x: 'sscc_' + x) >> \
+            dplyr.rename(
+                ejercicio = f.sscc_ejercicio,
+                mes = f.sscc_mes,
+            )
+        control_completo = sscc >> \
+            dplyr.full_join(siif) >> \
+            dplyr.mutate(
+                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+            ) >> \
+            dplyr.mutate(
+                diferencia = f.siif_importe - f.sscc_importe
+            )
+        control_completo.sort_values(
+            by=['mes'], 
+            inplace= True)
+        control_completo = pd.DataFrame(control_completo)
+        control_completo.reset_index(drop=True, inplace=True)
+        return control_completo
