@@ -4,8 +4,10 @@ from dataclasses import dataclass, field
 import pandas as pd
 from datar import base, dplyr, f
 from invicodatpy.icaro.migrate_icaro import MigrateIcaro
+from invicodatpy.slave.migrate_slave import MigrateSlave
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
-from invicodatpy.siif.all import (ComprobantesRecRci02, DeudaFlotanteRdeu012,
+from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
+                                  ComprobantesRecRci02, DeudaFlotanteRdeu012,
                                   JoinComprobantesGtosGpoPart,
                                   MayorContableRcocc31, PptoGtosFteRf602,
                                   ResumenFdosRfondo07tp)
@@ -18,18 +20,21 @@ from .hangling_path import HanglingPath
 class ImportDataFrame(HanglingPath):
     db_path:str = field(init=False, repr=False)
     ctas_ctes:pd.DataFrame = field(init=False, repr=False)
+    slave:pd.DataFrame = field(init=False, repr=False)
     icaro:pd.DataFrame = field(init=False, repr=False)
     icaro_neto_rdeu:pd.DataFrame = field(init=False, repr=False)
     siif_rdeu012:pd.DataFrame = field(init=False, repr=False)
     siif_rf602:pd.DataFrame = field(init=False, repr=False)
     siif_rfondo07tp:pd.DataFrame = field(init=False, repr=False)
+    siif_rcg01_uejp:pd.DataFrame = field(init=False, repr=False)
     siif_comprobantes:pd.DataFrame = field(init=False, repr=False)
     siif_comprobantes_haberes:pd.DataFrame = field(init=False, repr=False)
     siif_comprobantes_haberes_neto_rdeu:pd.DataFrame = field(init=False, repr=False)
     siif_rci02:pd.DataFrame = field(init=False, repr=False)
     siif_rcocc31:pd.DataFrame = field(init=False, repr=False)
-    sgf_resumen_rend_cuit:pd.DataFrame = field(init=False, repr=False)
     sgf_resumen_rend:pd.DataFrame = field(init=False, repr=False)
+    sgf_resumen_rend_cuit:pd.DataFrame = field(init=False, repr=False)
+    sgf_resumen_rend_honorarios:pd.DataFrame = field(init=False, repr=False)
     sscc_banco_invico:pd.DataFrame = field(init=False, repr=False)
 
 
@@ -38,6 +43,16 @@ class ImportDataFrame(HanglingPath):
         df = CtasCtes().from_sql(self.db_path + '/sscc.sqlite') 
         self.ctas_ctes = df
         return self.ctas_ctes
+
+    # --------------------------------------------------
+    def import_slave(self, ejercicio:str = None) -> pd.DataFrame:
+        df = MigrateSlave().from_sql(
+            self.db_path + '/slave.sqlite', 'honorarios_factureros')
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)  
+        self.slave = df
+        return self.slave
 
     # --------------------------------------------------
     def import_icaro(self, ejercicio:str = None, 
@@ -158,6 +173,21 @@ class ImportDataFrame(HanglingPath):
         df = df.loc[df['tipo_comprobante'] == 'ADELANTOS A CONTRATISTAS Y PROVEEDORES']
         self.siif_rfondo07tp = df
         return self.siif_rfondo07tp
+
+    # --------------------------------------------------
+    def import_siif_rcg01_uejp(self, ejercicio:str = None) -> pd.DataFrame:
+        df = ComprobantesGtosRcg01Uejp().from_sql(self.db_path + '/siif.sqlite')
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)
+        map_to = self.ctas_ctes.loc[:,['map_to', 'siif_gastos_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='siif_gastos_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'siif_gastos_cta_cte'], axis='columns', inplace=True)
+        self.siif_rcg01_uejp = df
+        return self.siif_rcg01_uejp
 
     def import_siif_comprobantes(self, ejercicio:str = None) -> pd.DataFrame:
         df = JoinComprobantesGtosGpoPart().from_sql(
@@ -393,6 +423,40 @@ class ImportDataFrame(HanglingPath):
                 dplyr.bind_rows(banco_invico, _copy=False)
         self.sgf_resumen_rend_cuit = pd.DataFrame(df)
         return self.sgf_resumen_rend_cuit
+
+    # --------------------------------------------------
+    def import_resumen_rend_honorarios(self, ejercicio:str = None, dep_emb:bool = True) -> pd.DataFrame:
+        df = ResumenRendProv().from_sql(self.db_path + '/sgf.sqlite')  
+        df = df.loc[df['origen'] != 'OBRAS']
+        df = df.loc[df['cta_cte'].isin(['130832-05', '130832-07'])]
+        df = df.loc[df['destino'].isin(['HONORARIOS - FUNCIONAMIENTO', 
+        'COMISIONES - FUNCIONAMIENTO', 'HONORARIOS - EPAM'])]
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)
+        map_to = self.ctas_ctes.loc[:,['map_to', 'sgf_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='sgf_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'sgf_cta_cte'], axis='columns', inplace=True)
+        if dep_emb:
+            banco = self.import_banco_invico(ejercicio=self.ejercicio)
+            banco = banco.loc[banco['cta_cte'] == '130832-05']
+            banco = banco.loc[banco['cod_imputacion'] == '049']
+            banco['importe_bruto'] = banco['importe'] * (-1)
+            banco['importe_neto'] = banco['importe_bruto']
+            banco['destino'] = 'EMBARGO POR ALIMENTOS'
+            banco.rename(columns={
+                "libramiento":"libramiento_sgf",
+                }, inplace=True)
+            banco = banco.loc[:, [
+                'ejercicio', 'mes', 'fecha', 'beneficiario',
+                'destino', 'cta_cte', 'libramiento_sgf', 'movimiento',
+                'importe_bruto', 'importe_neto']]
+            df = pd.concat([df, banco])
+        self.sgf_resumen_rend_honorarios = pd.DataFrame(df)
+        return self.sgf_resumen_rend_honorarios
 
     # --------------------------------------------------
     def import_banco_invico(self, ejercicio:str = None) -> pd.DataFrame:
