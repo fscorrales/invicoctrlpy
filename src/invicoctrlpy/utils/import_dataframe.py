@@ -388,13 +388,18 @@ class ImportDataFrame(HanglingPath):
         df.drop(['map_to', 'sgf_cta_cte'], axis='columns', inplace=True)
         #Filtramos los registros duplicados en la 106
         df_106 = df.copy()
-        df_106 = df_106 >> \
-            dplyr.filter_(f.cta_cte == '106') >> \
-            dplyr.distinct(
-                f.mes, f.fecha, f.beneficiario,
-                f.libramiento_sgf, 
-                _keep_all=True
-            )
+        df_106 = df_106.loc[df_106['cta_cte'] == '106']
+        df_106 = df_106.drop_duplicates(subset=[
+            'mes', 'fecha', 'beneficiario', 
+            'libramiento_sgf', 'importe_bruto'
+        ])
+        # df_106 = df_106 >> \
+        #     dplyr.filter_(f.cta_cte == '106') >> \
+        #     dplyr.distinct(
+        #         f.mes, f.fecha, f.beneficiario,
+        #         f.libramiento_sgf, f.importe_bruto,
+        #         _keep_all=True
+        #     )
         df = df >> \
             dplyr.filter_(f.cta_cte != '106') >> \
             dplyr.bind_rows(df_106)
