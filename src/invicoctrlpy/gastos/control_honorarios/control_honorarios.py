@@ -4,7 +4,8 @@ Author: Fernando Corrales <corrales_fernando@hotmail.com>
 Purpose: Control ejecución partida 100 SIIF (haberes)
 Data required:
     - Slave
-    - SIIF rcg01_uejp (para agregar cta_cte a Slave)
+    - SIIF rcg01_uejp
+    - SIIF gto_rpa03g
     - SGF Resumen Rendicions por Proveedor
     - SSCC Resumen General de Movimientos (para agregar dep. emb. x alim. 130832-05)
     - SSCC ctas_ctes (manual data)
@@ -45,12 +46,13 @@ class ControlHonorarios(ImportDataFrame):
         update_slave = update_db.UpdateSlave(
             update_path_input + '/Slave/Slave.mdb', 
             self.db_path + '/slave.sqlite')
-        update_slave.migrate_slave()
+        # update_slave.migrate_slave()
 
         update_siif = update_db.UpdateSIIF(
             update_path_input + '/Reportes SIIF', 
             self.db_path + '/siif.sqlite')
         update_siif.update_comprobantes_gtos_rcg01_uejp()
+        update_siif.update_comprobantes_gtos_gpo_part_gto_rpa03g()
 
         update_sgf = update_db.UpdateSGF(
             update_path_input + '/Sistema Gestion Financiera', 
@@ -68,6 +70,7 @@ class ControlHonorarios(ImportDataFrame):
         self.import_ctas_ctes()
         self.import_slave()
         self.import_resumen_rend_honorarios(self.ejercicio, True)
+        self.import_siif_comprobantes()
 
     # --------------------------------------------------
     def import_slave(self):
@@ -75,8 +78,56 @@ class ControlHonorarios(ImportDataFrame):
         cta_cte = self.import_siif_rcg01_uejp(self.ejercicio)
         cta_cte = cta_cte.loc[:, ['nro_comprobante', 'cta_cte']]
         df = df.merge(cta_cte, on='nro_comprobante', how='left')
+        # df['origen'] = df['cta_cte'].apply(lambda x: 'FUNC' if x == '130832-05' else 'EPAM')
         self.slave = df
         return self.slave
+
+    # --------------------------------------------------
+    def import_siif_comprobantes(self):
+        df = super().siif_comprobantes(ejercicio = self.ejercicio)
+        df = df.loc[df['cuit'] == '30632351514']
+        df = df.loc[df['grupo'] == '300']
+        df = df.loc[df['cta_cte'].isin(['130832-05', '130832-07'])]
+        keep = ['HONOR', 'RECON', 'LOC']
+        df = df.loc[~df.glosa.str.contains('|'.join(keep))]
+        # df['origen'] = df['cta_cte'].apply(lambda x: 'FUNC' if x == '130832-05' else 'EPAM')
+        self.siif_comprobantes = df
+        return self.siif_comprobantes
+
+    # # --------------------------------------------------
+    # def slave_vs_siif(self):
+    #     slave = self.slave.copy()
+    #     slave = slave >> \
+    #         dplyr.select(
+    #             f.mes, f.nro_comprobante, 
+    #             f.cta_cte, f.importe_bruto) >> \
+    #         dplyr.group_by(f.mes, f.nro_comprobante, f.cta_cte) >> \
+    #         dplyr.summarise(ejecutado_slave = base.sum_(f.importe_bruto),
+    #                         _groups = 'drop')
+    #     siif = self.siif_comprobantes.copy()
+    #     siif = siif >> \
+    #         dplyr.select(
+    #             f.mes, f.nro_comprobante, 
+    #             f.cta_cte, f.importe
+    #         ) >> \
+    #         dplyr.group_by(f.mes, f.nro_comprobante, f.cta_cte) >> \
+    #         dplyr.summarise(
+    #             ejecutado_siif = base.sum_(f.importe),
+    #             _groups = 'drop')
+    #     control_mes = slave >> \
+    #         dplyr.full_join(siif) >> \
+    #         dplyr.mutate(
+    #             dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+    #         ) >> \
+    #         dplyr.mutate(
+    #             diferencia = f.ejecutado_slave - f.ejecutado_siif
+    #         )
+    #     #     dplyr.filter_(~dplyr.near(f.diferencia, 0))
+    #     control_mes.sort_values(by=['mes', 'cta_cte'], inplace= True)
+    #     control_mes = pd.DataFrame(control_mes)
+    #     control_mes['dif_acum'] = control_mes['diferencia'].cumsum()
+    #     control_mes.reset_index(drop=True, inplace=True)
+    #     return control_mes
 
     # --------------------------------------------------
     def control_mes(self):
