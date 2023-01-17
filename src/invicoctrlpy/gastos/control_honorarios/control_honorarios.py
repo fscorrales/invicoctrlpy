@@ -75,6 +75,8 @@ class ControlHonorarios(ImportDataFrame):
     # --------------------------------------------------
     def import_slave(self):
         df = super().import_slave(ejercicio = self.ejercicio)
+        keep = ['SIIF']
+        df = df.loc[~df.nro_comprobante.str.contains('|'.join(keep))]
         cta_cte = self.import_siif_rcg01_uejp(self.ejercicio)
         cta_cte = cta_cte.loc[:, ['nro_comprobante', 'cta_cte']]
         df = df.merge(cta_cte, on='nro_comprobante', how='left')
@@ -84,15 +86,72 @@ class ControlHonorarios(ImportDataFrame):
 
     # --------------------------------------------------
     def import_siif_comprobantes(self):
-        df = super().siif_comprobantes(ejercicio = self.ejercicio)
+        df = super().import_siif_comprobantes(ejercicio = self.ejercicio)
         df = df.loc[df['cuit'] == '30632351514']
         df = df.loc[df['grupo'] == '300']
         df = df.loc[df['cta_cte'].isin(['130832-05', '130832-07'])]
         keep = ['HONOR', 'RECON', 'LOC']
-        df = df.loc[~df.glosa.str.contains('|'.join(keep))]
+        df = df.loc[df.glosa.str.contains('|'.join(keep))]
         # df['origen'] = df['cta_cte'].apply(lambda x: 'FUNC' if x == '130832-05' else 'EPAM')
         self.siif_comprobantes = df
         return self.siif_comprobantes
+
+    # --------------------------------------------------
+    def siif_vs_slave(self):
+        siif = self.siif_comprobantes.copy()
+        siif = siif >> \
+            dplyr.select(
+                siif_nro = f.nro_comprobante,
+                siif_importe = f.importe,
+                siif_mes = f.mes,
+                siif_cta_cte = f.cta_cte,
+            ) >> \
+            dplyr.group_by(f.siif_mes, f.siif_nro, f.siif_cta_cte) >> \
+            dplyr.summarise(
+                siif_importe = base.sum_(f.siif_importe),
+                _groups = 'drop')
+        slave = self.slave.copy()
+        slave = slave >> \
+            dplyr.select(
+                slave_nro = f.nro_comprobante,
+                slave_importe = f.importe_bruto,
+                slave_mes = f.mes,
+                slave_cta_cte = f.cta_cte
+            )>> \
+            dplyr.group_by(f.slave_mes, f.slave_nro, f.slave_cta_cte) >> \
+            dplyr.summarise(
+                slave_importe = base.sum_(f.slave_importe),
+                _groups = 'drop')
+        comprobantes = siif >> \
+            dplyr.full_join(slave, by={'siif_nro':'slave_nro'}, keep=True) >> \
+            tidyr.replace_na(0) >> \
+            dplyr.mutate(
+                err_nro = f.siif_nro != f.slave_nro,
+                err_importe = ~dplyr.near(f.siif_importe - f.slave_importe, 0),
+                err_cta_cte = f.siif_cta_cte != f.slave_cta_cte,
+                err_mes = f.siif_mes != f.slave_mes
+            ) >>\
+            dplyr.select(
+                f.siif_nro, f.slave_nro, f.err_nro,
+                f.siif_importe, f.slave_importe, f.err_importe,
+                f.siif_mes, f.slave_mes, f.err_mes,
+                f.siif_cta_cte, f.slave_cta_cte, f.err_cta_cte,
+            ) >> \
+            dplyr.filter_(
+                f.err_nro | f.err_mes | f.err_importe | f.err_cta_cte ) >> \
+            dplyr.mutate(
+                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+            )
+            # dplyr.mutate(
+            #     err_nro = dplyr.if_else(f.err_nro > 0, "\u2713", "\u2718")
+            # )
+        comprobantes = pd.DataFrame(comprobantes)
+        comprobantes.sort_values(
+            by=['err_nro', 'err_importe', 
+            'err_cta_cte', 'err_mes'], ascending=False,
+            inplace=True)
+        comprobantes.reset_index(drop=True, inplace=True)
+        return comprobantes
 
     # # --------------------------------------------------
     # def slave_vs_siif(self):
