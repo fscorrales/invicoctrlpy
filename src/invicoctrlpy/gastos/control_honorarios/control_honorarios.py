@@ -46,7 +46,7 @@ class ControlHonorarios(ImportDataFrame):
         update_slave = update_db.UpdateSlave(
             update_path_input + '/Slave/Slave.mdb', 
             self.db_path + '/slave.sqlite')
-        # update_slave.migrate_slave()
+        update_slave.migrate_slave()
 
         update_siif = update_db.UpdateSIIF(
             update_path_input + '/Reportes SIIF', 
@@ -89,6 +89,7 @@ class ControlHonorarios(ImportDataFrame):
         df = super().import_siif_comprobantes(ejercicio = self.ejercicio)
         df = df.loc[df['cuit'] == '30632351514']
         df = df.loc[df['grupo'] == '300']
+        df = df.loc[df['partida'] != '384']
         df = df.loc[df['cta_cte'].isin(['130832-05', '130832-07'])]
         keep = ['HONOR', 'RECON', 'LOC']
         df = df.loc[df.glosa.str.contains('|'.join(keep))]
