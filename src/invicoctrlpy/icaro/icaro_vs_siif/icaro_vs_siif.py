@@ -62,7 +62,7 @@ class IcaroVsSIIF(ImportDataFrame):
     # --------------------------------------------------
     def import_dfs(self):
         self.import_ctas_ctes()
-        self.import_icaro(self.ejercicio)
+        self.import_icaro_carga(self.ejercicio)
         self.import_siif_rfondo07tp_pa6(self.ejercicio)
         self.import_siif_rf602()
         self.import_siif_comprobantes()
@@ -83,7 +83,7 @@ class IcaroVsSIIF(ImportDataFrame):
 
     # --------------------------------------------------
     def control_ejecucion_anual(self):
-        icaro_por_estructura = self.icaro.copy()
+        icaro_por_estructura = self.icaro_carga.copy()
         icaro_por_estructura = icaro_por_estructura >> \
             dplyr.filter_(f.tipo != 'PA6') >> \
             dplyr.mutate(estructura = f.actividad + '-' + f.partida) >> \
@@ -120,7 +120,7 @@ class IcaroVsSIIF(ImportDataFrame):
                 siif_cuit = f.cuit,
                 siif_partida = f.partida
             )
-        icaro = self.icaro.copy()
+        icaro = self.icaro_carga.copy()
         icaro = icaro >> \
             dplyr.filter_(f.tipo != 'PA6') >> \
             dplyr.select(
@@ -201,7 +201,7 @@ class IcaroVsSIIF(ImportDataFrame):
                 siif_mes_reg = f.mes
             )
         
-        icaro = self.icaro
+        icaro = self.icaro_carga
         icaro = icaro >> \
             dplyr.select(
                 icaro_mes = f.mes,

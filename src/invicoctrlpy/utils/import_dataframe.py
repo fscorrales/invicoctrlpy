@@ -4,13 +4,13 @@ from dataclasses import dataclass, field
 import pandas as pd
 from datar import base, dplyr, f
 from invicodatpy.icaro.migrate_icaro import MigrateIcaro
-from invicodatpy.slave.migrate_slave import MigrateSlave
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
 from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   ComprobantesRecRci02, DeudaFlotanteRdeu012,
                                   JoinComprobantesGtosGpoPart,
-                                  MayorContableRcocc31, PptoGtosFteRf602,
-                                  ResumenFdosRfondo07tp)
+                                  MayorContableRcocc31, PptoGtosDescRf610,
+                                  PptoGtosFteRf602, ResumenFdosRfondo07tp)
+from invicodatpy.slave.migrate_slave import MigrateSlave
 from invicodatpy.sscc.all import BancoINVICO, CtasCtes
 
 from .hangling_path import HanglingPath
@@ -21,8 +21,8 @@ class ImportDataFrame(HanglingPath):
     db_path:str = field(init=False, repr=False)
     ctas_ctes:pd.DataFrame = field(init=False, repr=False)
     slave:pd.DataFrame = field(init=False, repr=False)
-    icaro:pd.DataFrame = field(init=False, repr=False)
-    icaro_neto_rdeu:pd.DataFrame = field(init=False, repr=False)
+    icaro_carga:pd.DataFrame = field(init=False, repr=False)
+    icaro_carga_neto_rdeu:pd.DataFrame = field(init=False, repr=False)
     siif_rdeu012:pd.DataFrame = field(init=False, repr=False)
     siif_rf602:pd.DataFrame = field(init=False, repr=False)
     siif_rfondo07tp:pd.DataFrame = field(init=False, repr=False)
@@ -55,7 +55,7 @@ class ImportDataFrame(HanglingPath):
         return self.slave
 
     # --------------------------------------------------
-    def import_icaro(self, ejercicio:str = None, 
+    def import_icaro_carga(self, ejercicio:str = None, 
                         neto_pa6:bool = False,
                         neto_reg:bool = False) -> pd.DataFrame:
         df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'carga')  
@@ -73,13 +73,13 @@ class ImportDataFrame(HanglingPath):
             df = df.loc[df['tipo'] != 'PA6']
         if neto_reg:
             df = df.loc[df['tipo'] != 'REG']
-        self.icaro = df
-        return self.icaro
+        self.icaro_carga = df
+        return self.icaro_carga
 
     # --------------------------------------------------
-    def import_icaro_neto_rdeu(self, ejercicio:str) -> pd.DataFrame:
+    def import_icaro_carga_neto_rdeu(self, ejercicio:str) -> pd.DataFrame:
         #Neteamos los comprobantes de gastos no pagados (Deuda Flotante)
-        icaro = self.import_icaro(neto_pa6=True, neto_reg=True)
+        icaro = self.import_icaro_carga(neto_pa6=True, neto_reg=True)
         # icaro = icaro.loc[~icaro['tipo'].isin(['REG', 'PA6'])]
         # icaro = icaro >> \
         #     dplyr.filter_(f.tipo != 'PA6')
@@ -94,11 +94,11 @@ class ImportDataFrame(HanglingPath):
             )  >> \
             dplyr.select(~f.saldo) >> \
             dplyr.bind_rows(icaro)
-        icaro = self.import_icaro()
+        icaro = self.import_icaro_carga()
         icaro = icaro.loc[icaro['tipo'].isin(['PA6'])]
         rdeu = rdeu >> \
             dplyr.bind_rows(icaro)
-        self.icaro_neto_rdeu = pd.DataFrame(rdeu)
+        self.icaro_carga_neto_rdeu = pd.DataFrame(rdeu)
 
         # Ajustamos la Deuda Flotante Pagada
         rdeu = self.import_siif_rdeu012()
@@ -113,7 +113,7 @@ class ImportDataFrame(HanglingPath):
         rdeu = rdeu >> \
             dplyr.filter_(f.ejercicio == ejercicio) >> \
             dplyr.left_join(
-                dplyr.select(self.import_icaro(neto_pa6=True, neto_reg=True),
+                dplyr.select(self.import_icaro_carga(neto_pa6=True, neto_reg=True),
                     f.nro_comprobante, f.actividad, f.partida, 
                     f.fondo_reparo, f.certificado, f.avance, 
                     f.origen, f.obra
@@ -134,11 +134,16 @@ class ImportDataFrame(HanglingPath):
                 fecha = f.fecha_hasta,
                 mes = f.mes_hasta
             ) >> \
-            dplyr.bind_rows(self.icaro_neto_rdeu) 
+            dplyr.bind_rows(self.icaro_carga_neto_rdeu) 
         df = pd.DataFrame(rdeu)
         df = df.loc[df['ejercicio'] == ejercicio]
-        self.icaro_neto_rdeu = df
-        return self.icaro_neto_rdeu
+        self.icaro_carga_neto_rdeu = df
+        return self.icaro_carga_neto_rdeu
+
+    # --------------------------------------------------
+    def import_icaro_obras(self) -> pd.DataFrame:
+        df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'obras')  
+        return df
 
     # --------------------------------------------------
     def import_siif_rdeu012(self, ejercicio:str = None) -> pd.DataFrame:
@@ -164,6 +169,20 @@ class ImportDataFrame(HanglingPath):
             df = df.loc[df['ejercicio'] == self.ejercicio]
         self.siif_rf602 = df
         return self.siif_rf602
+
+    # --------------------------------------------------
+    def import_siif_desc_pres(self) -> pd.DataFrame:
+        df = PptoGtosDescRf610().from_sql(self.db_path + '/siif.sqlite')
+        df = df.loc[:, [
+            'estructura', 'desc_prog', 'desc_subprog',
+            'desc_proy', 'desc_act', 'ejercicio'
+            ]]
+        # df['estructura'] = df['estructura'].str[0:11]
+        df.sort_values(by=['ejercicio', 'estructura'], 
+        inplace=True, ascending=[False, True])
+        df.drop(labels=['ejercicio'], axis='columns', inplace=True)
+        df.drop_duplicates(subset=['estructura'], inplace=True, keep='first')
+        return df
 
     # --------------------------------------------------
     def import_siif_rfondo07tp_pa6(self, ejercicio:str = None) -> pd.DataFrame:

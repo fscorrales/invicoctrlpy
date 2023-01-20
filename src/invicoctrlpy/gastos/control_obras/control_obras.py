@@ -68,9 +68,9 @@ class ControlObras(ImportDataFrame):
     # --------------------------------------------------
     def import_dfs(self):
         self.import_ctas_ctes()
-        self.import_icaro_neto_rdeu(self.ejercicio)
+        self.import_icaro_carga_neto_rdeu(self.ejercicio)
         self.import_siif_rdeu012()
-        self.import_icaro(self.ejercicio)
+        self.import_icaro_carga(self.ejercicio)
         self.import_resumen_rend_cuit()
 
     # --------------------------------------------------
@@ -90,7 +90,7 @@ class ControlObras(ImportDataFrame):
 
     # --------------------------------------------------
     def control_mes_cta_cte(self):
-        icaro_mes_cta_cte = self.icaro_neto_rdeu.copy()
+        icaro_mes_cta_cte = self.icaro_carga_neto_rdeu.copy()
         icaro_mes_cta_cte = icaro_mes_cta_cte >> \
             dplyr.select(f.mes, f.cta_cte, f.importe) >> \
             dplyr.group_by(f.mes, f.cta_cte) >> \
@@ -123,7 +123,7 @@ class ControlObras(ImportDataFrame):
 
     # --------------------------------------------------
     def control_completo(self):
-        icaro_completo = self.icaro_neto_rdeu.copy()
+        icaro_completo = self.icaro_carga_neto_rdeu.copy()
         icaro_completo = icaro_completo >> \
             dplyr.rename_with(lambda x: 'icaro_' + x) >> \
             dplyr.rename(
