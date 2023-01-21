@@ -109,6 +109,7 @@ class IcaroVsSIIF(ImportDataFrame):
     # --------------------------------------------------
     def control_comprobantes(self):
         siif = self.siif_comprobantes.copy()
+        siif.loc[(siif.clase_reg == 'REG') & (siif.nro_fondo.isnull()), 'clase_reg'] = 'CYO'
         siif = siif >> \
             dplyr.select(
                 siif_nro = f.nro_comprobante,
