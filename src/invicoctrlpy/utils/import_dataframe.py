@@ -55,6 +55,26 @@ class ImportDataFrame(HanglingPath):
         return self.slave
 
     # --------------------------------------------------
+    def import_icaro_desc_pres(self) -> pd.DataFrame:
+        df_prog = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'programas')
+        df_subprog = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'subprogramas')
+        df_proy = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'proyectos')
+        df_act = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'actividades')
+        # Merge all
+        df = df_act.merge(df_proy, how='left', on='proyecto', copy=False)
+        df = df.merge(df_subprog, how='left', on=['subprograma'], copy=False)
+        df = df.merge(df_prog, how='left', on=['programa'], copy=False)
+        # Combine number with description
+        df['desc_prog'] = df['actividad'].str[0:2] + ' - ' + df['desc_prog']
+        df.desc_subprog.fillna(value='', inplace=True)
+        df['desc_subprog'] = df['actividad'].str[3:5] + ' - ' + df['desc_subprog']
+        df['desc_proy'] = df['actividad'].str[6:8] + ' - ' + df['desc_proy']
+        df['desc_act'] = df['actividad'].str[9:11] + ' - ' + df['desc_act']
+
+        df = df.loc[:, ['actividad','desc_prog','desc_subprog','desc_proy','desc_act']]
+        return df
+
+    # --------------------------------------------------
     def import_icaro_carga(self, ejercicio:str = None, 
                         neto_pa6:bool = False,
                         neto_reg:bool = False) -> pd.DataFrame:
@@ -166,29 +186,59 @@ class ImportDataFrame(HanglingPath):
     def import_siif_rf602(self, ejercicio:str = None) -> pd.DataFrame:
         df = PptoGtosFteRf602().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == self.ejercicio]
+            df = df.loc[df['ejercicio'] == ejercicio]
         self.siif_rf602 = df
         return self.siif_rf602
 
     # --------------------------------------------------
-    def import_siif_desc_pres(self) -> pd.DataFrame:
+    def import_siif_desc_pres(self, ejercicio_to:str = None) -> pd.DataFrame:
         df = PptoGtosDescRf610().from_sql(self.db_path + '/siif.sqlite')
-        df = df.loc[:, [
-            'estructura', 'desc_prog', 'desc_subprog',
-            'desc_proy', 'desc_act', 'ejercicio'
-            ]]
-        # df['estructura'] = df['estructura'].str[0:11]
+        if ejercicio_to != None:
+            df = df.loc[df.ejercicio.astype(int) <= int(ejercicio_to)]
         df.sort_values(by=['ejercicio', 'estructura'], 
-        inplace=True, ascending=[False, True])
-        df.drop(labels=['ejercicio'], axis='columns', inplace=True)
-        df.drop_duplicates(subset=['estructura'], inplace=True, keep='first')
+        inplace=True, ascending=[False, True])        
+        # Programas únicos
+        df_prog = df.loc[:, ['programa', 'desc_prog']]
+        df_prog.drop_duplicates(subset=['programa'], inplace=True, keep='first')
+        # Subprogramas únicos
+        df_subprog = df.loc[:, ['programa', 'subprograma','desc_subprog']]
+        df_subprog.drop_duplicates(
+            subset=['programa', 'subprograma'], 
+            inplace=True, keep='first')
+        # Proyectos únicos
+        df_proy = df.loc[:, [
+            'programa', 'subprograma', 'proyecto', 'desc_proy']]
+        df_proy.drop_duplicates(
+            subset=['programa', 'subprograma', 'proyecto'], 
+            inplace=True, keep='first')
+        # Actividades únicos
+        df_act = df.loc[:, [
+            'estructura', 'programa', 'subprograma',
+            'proyecto', 'actividad', 'desc_act',
+            ]]
+        df_act.drop_duplicates(subset=['estructura'], inplace=True, keep='first')
+        # Merge all
+        df = df_act.merge(df_prog, how='left', on='programa', copy=False)
+        df = df.merge(
+            df_subprog, how='left', on=['programa', 'subprograma'], 
+            copy=False)
+        df = df.merge(
+            df_proy, how='left', on=['programa', 'subprograma', 'proyecto'], 
+            copy=False)
+        df['desc_prog'] = df.programa + ' - ' + df.desc_prog
+        df['desc_subprog'] = df.subprograma + ' - ' + df.desc_subprog
+        df['desc_proy'] = df.proyecto + ' - ' + df.desc_proy
+        df['desc_act'] = df.actividad + ' - ' + df.desc_act
+        df.drop(
+            labels=['programa', 'subprograma', 'proyecto', 'actividad'], 
+            axis=1, inplace=True)
         return df
 
     # --------------------------------------------------
     def import_siif_rfondo07tp_pa6(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenFdosRfondo07tp().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == self.ejercicio]
+            df = df.loc[df['ejercicio'] == ejercicio]
         df = df.loc[df['tipo_comprobante'] == 'ADELANTOS A CONTRATISTAS Y PROVEEDORES']
         self.siif_rfondo07tp = df
         return self.siif_rfondo07tp
@@ -212,7 +262,7 @@ class ImportDataFrame(HanglingPath):
         df = JoinComprobantesGtosGpoPart().from_sql(
             self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == self.ejercicio]
+            df = df.loc[df['ejercicio'] == ejercicio]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'siif_gastos_cta_cte']]
         df = pd.merge(
@@ -343,7 +393,7 @@ class ImportDataFrame(HanglingPath):
     def import_siif_rci02(self, ejercicio:str = None) -> pd.DataFrame:
         df = ComprobantesRecRci02().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == self.ejercicio]
+            df = df.loc[df['ejercicio'] == ejercicio]
         self.siif_rci02 = df
         return self.siif_rci02
 
