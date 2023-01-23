@@ -109,6 +109,7 @@ class IcaroVsSIIF(ImportDataFrame):
     # --------------------------------------------------
     def control_comprobantes(self):
         siif = self.siif_comprobantes.copy()
+        # En ICARO limito los REG para regularizaciones de PA6
         siif.loc[(siif.clase_reg == 'REG') & (siif.nro_fondo.isnull()), 'clase_reg'] = 'CYO'
         siif = siif >> \
             dplyr.select(
@@ -160,7 +161,7 @@ class IcaroVsSIIF(ImportDataFrame):
             dplyr.filter_(
                 f.err_nro | f.err_mes | f.err_partida |
                 f.err_fuente | f.err_importe | f.err_cta_cte |
-                f.err_cuit) >> \
+                f.err_cuit| f.err_tipo ) >> \
             dplyr.mutate(
                 dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
             )
