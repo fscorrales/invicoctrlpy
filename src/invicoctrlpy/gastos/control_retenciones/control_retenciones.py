@@ -144,6 +144,10 @@ class ControlRetenciones(ImportDataFrame):
         return pd.DataFrame(df)
 
     # --------------------------------------------------
+    def import_banco_invico(self) -> pd.DataFrame:
+        return super().import_banco_invico(ejercicio = self.ejercicio)
+
+    # --------------------------------------------------
     def control_retenciones_mensual(self):
         icaro_carga = self.import_icaro_carga_neto_rdeu()
         icaro_retenciones = self.import_icaro_retenciones()
