@@ -143,7 +143,7 @@ class ImportDataFrame(HanglingPath):
             dplyr.mutate(
                 importe = f.saldo,
                 tipo = 'RDEU',
-                id = f.nro_comprobante
+                id = f.nro_comprobante + 'C'
             ) >> \
             dplyr.filter_(~base.is_na(f.actividad)) >> \
             dplyr.select(
@@ -159,6 +159,15 @@ class ImportDataFrame(HanglingPath):
         df = df.loc[df['ejercicio'] == ejercicio]
         self.icaro_carga_neto_rdeu = df
         return self.icaro_carga_neto_rdeu
+
+    # --------------------------------------------------
+    def import_icaro_retenciones(self) -> pd.DataFrame:
+        df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'retenciones')  
+        # df = df.loc[df['tipo'] != 'REG']
+        df.reset_index(drop=True, inplace=True)
+        # if neto_pa6:
+        #     df = df.loc[df['tipo'] != 'PA6']
+        return df
 
     # --------------------------------------------------
     def import_icaro_obras(self) -> pd.DataFrame:
