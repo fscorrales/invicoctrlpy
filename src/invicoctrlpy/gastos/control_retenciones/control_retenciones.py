@@ -3,13 +3,15 @@
 Author: Fernando Corrales <corrales_fernando@hotmail.com>
 Purpose: Control de Retenciones Banco INVICO vs SIIF o Icaro
 Data required:
+    - Icaro
+    - SIIF rdeu012 (para netear Icaro)
+    - SGF Resumen Rend por Proveedor
+    - SSCC Resumen General de Movimientos
+    - SSCC ctas_ctes (manual data)
     - SIIF rcocc31 (
         2111-1-2 Contratistas
         2122-1-2 Retenciones
         1112-2-6 Banco)
-    - Icaro si lo anterior no funciona
-    - SSCC Resumen General de Movimientos
-    - SSCC ctas_ctes (manual data)
 Packages:
  - invicodatpy (pip install '/home/kanou/IT/R Apps/R Gestion INVICO/invicodatpy')
  - invicoctrlpy (pip install -e '/home/kanou/IT/R Apps/R Gestion INVICO/invicoctrlpy')
@@ -45,21 +47,28 @@ class ControlRetenciones(ImportDataFrame):
     def update_sql_db(self):
         update_path_input = self.get_update_path_input()
 
-        # update_icaro = update_db.UpdateIcaro(
-        #     self.get_outside_path() + '/R Output/SQLite Files/ICARO.sqlite', 
-        #     self.db_path + '/icaro.sqlite')
-        # update_icaro.migrate_icaro()
+        update_icaro = update_db.UpdateIcaro(
+            self.get_outside_path() + '/R Output/SQLite Files/ICARO.sqlite', 
+            self.db_path + '/icaro.sqlite')
+        update_icaro.migrate_icaro()
 
         update_siif = update_db.UpdateSIIF(
             update_path_input + '/Reportes SIIF', 
             self.db_path + '/siif.sqlite')
         update_siif.update_mayor_contable_rcocc31()
+        update_siif.update_deuda_flotante_rdeu012()
 
         update_sscc = update_db.UpdateSSCC(
             update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
             self.db_path + '/sscc.sqlite')
         update_sscc.update_ctas_ctes()
         update_sscc.update_banco_invico()
+
+        update_sgf = update_db.UpdateSGF(
+            update_path_input + '/Sistema Gestion Financiera', 
+            self.db_path + '/sgf.sqlite')
+        update_sgf.update_resumen_rend_prov()
+        update_sgf.update_listado_prov()
 
     # --------------------------------------------------
     def import_dfs(self):
@@ -87,7 +96,39 @@ class ControlRetenciones(ImportDataFrame):
                 values_fn = base.sum,
                 values_fill = 0
             )
+        df_pivot = pd.DataFrame(df_pivot)
+        df_pivot['retenciones'] = df_pivot.sum(axis=1, numeric_only= True)
         return pd.DataFrame(df_pivot)
+
+    # --------------------------------------------------
+    def import_icaro_carga_con_retenciones(self):
+        icaro_carga = self.import_icaro_carga_neto_rdeu()
+        icaro_retenciones = self.import_icaro_retenciones()
+        icaro_completo = icaro_carga.merge(
+            icaro_retenciones, how='left', left_on='id', 
+            right_on='id_carga', copy=False)
+        icaro_completo = icaro_completo >>\
+            tidyr.replace_na(0) >>\
+            dplyr.mutate(
+                importe_bruto = f.importe,
+                retenciones = dplyr.if_else(f.importe_bruto < 0, 
+                    f.retenciones * (-1), f.retenciones),
+                importe_neto = f.importe_bruto - f.retenciones
+            ) >>\
+            dplyr.select(
+                ~f.importe, ~f.id_carga, ~f.nro_comprobante) >>\
+            dplyr.select(
+                f.ejercicio, f.mes, f.fecha, f.id, f.fuente,
+                f.cta_cte, f.cuit, f.tipo, 
+                f.importe_bruto, f.retenciones, f.importe_neto,
+                dplyr.everything()
+            )
+        return icaro_completo
+
+    # --------------------------------------------------
+    def import_resumen_rend_cuit(self) -> pd.DataFrame:
+        return super().import_resumen_rend_cuit(
+            ejercicio = self.ejercicio, neto_cert_neg=False)
 
     # --------------------------------------------------
     def import_siif_pagos_contratistas(self):
@@ -160,11 +201,15 @@ class ControlRetenciones(ImportDataFrame):
                 by={'id':'id_carga'},
                 copy=False
             ) >>\
-            dplyr.select(~f.id)
+            dplyr.select(~f.id) >>\
+            dplyr.mutate(
+                retenciones = dplyr.if_else(f.importe_bruto < 0, 
+                    f.retenciones * (-1), f.retenciones)
+                )
         df = pd.DataFrame(df)
         df = df.groupby(['mes']).sum()
         df.reset_index(inplace=True)
-        df['retenciones'] = df.sum(axis=1, numeric_only= True) - df.importe_bruto
+        #df['retenciones'] = df.sum(axis=1, numeric_only= True) - df.importe_bruto
         df['importe_neto'] = df.importe_bruto - df.retenciones
         return df
 
@@ -181,10 +226,14 @@ class ControlRetenciones(ImportDataFrame):
                 by={'id':'id_carga'},
                 copy=False
             ) >>\
-            dplyr.select(~f.id)
+            dplyr.select(~f.id) >>\
+            dplyr.mutate(
+                retenciones = dplyr.if_else(f.importe_bruto < 0, 
+                    f.retenciones * (-1), f.retenciones)
+                )
         df = pd.DataFrame(df)
         df = df.groupby(['mes', 'cta_cte']).sum()
         df.reset_index(inplace=True)
-        df['retenciones'] = df.sum(axis=1, numeric_only= True) - df.importe_bruto
+        #df['retenciones'] = df.sum(axis=1, numeric_only= True) - df.importe_bruto
         df['importe_neto'] = df.importe_bruto - df.retenciones
         return df
