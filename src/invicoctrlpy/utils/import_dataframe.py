@@ -7,11 +7,13 @@ from invicodatpy.icaro.migrate_icaro import MigrateIcaro
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
 from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   ComprobantesRecRci02, DeudaFlotanteRdeu012,
+                                  DeudaFlotanteRdeu012b2C,
                                   JoinComprobantesGtosGpoPart,
-                                  MayorContableRcocc31, PptoGtosDescRf610,
-                                  PptoGtosFteRf602, ResumenFdosRfondo07tp)
+                                  JoinPptoGtosFteDesc, MayorContableRcocc31,
+                                  PptoGtosDescRf610, PptoGtosFteRf602,
+                                  ResumenFdosRfondo07tp)
 from invicodatpy.slave.migrate_slave import MigrateSlave
-from invicodatpy.sscc.all import BancoINVICO, CtasCtes
+from invicodatpy.sscc.all import BancoINVICO, CtasCtes, SdoFinalBancoINVICO
 
 from .hangling_path import HanglingPath
 
@@ -192,6 +194,14 @@ class ImportDataFrame(HanglingPath):
         return self.siif_rdeu012
 
     # --------------------------------------------------
+    def import_siif_rdeu012b2_c(self, mes_hasta:str = None) -> pd.DataFrame:
+        df = DeudaFlotanteRdeu012b2C().from_sql(self.db_path + '/siif.sqlite')
+        if mes_hasta != None:
+            df = df.loc[df['mes_hasta'] == mes_hasta]
+        df.reset_index(drop=True, inplace=True)
+        return df
+
+    # --------------------------------------------------
     def import_siif_rf602(self, ejercicio:str = None) -> pd.DataFrame:
         df = PptoGtosFteRf602().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
@@ -242,6 +252,14 @@ class ImportDataFrame(HanglingPath):
             labels=['programa', 'subprograma', 'proyecto', 'actividad'], 
             axis=1, inplace=True)
         return df
+
+    # --------------------------------------------------
+    def import_siif_ppto_gto_con_desc(self, ejercicio:str = None) -> pd.DataFrame:
+        df = JoinPptoGtosFteDesc().from_sql(self.db_path + '/siif.sqlite')
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == ejercicio]
+        return df
+
 
     # --------------------------------------------------
     def import_siif_rfondo07tp_pa6(self, ejercicio:str = None) -> pd.DataFrame:
@@ -561,3 +579,17 @@ class ImportDataFrame(HanglingPath):
         df.drop(['map_to', 'sscc_cta_cte'], axis='columns', inplace=True)
         self.sscc_banco_invico = df
         return self.sscc_banco_invico
+
+    # --------------------------------------------------
+    def import_sdo_final_banco_invico(self, ejercicio:str = None) -> pd.DataFrame:
+        df = SdoFinalBancoINVICO().from_sql(self.db_path + '/sscc.sqlite')
+        if ejercicio != None:  
+            df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)
+        map_to = self.ctas_ctes.loc[:,['map_to', 'sscc_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='sscc_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'sscc_cta_cte'], axis='columns', inplace=True)
+        return df

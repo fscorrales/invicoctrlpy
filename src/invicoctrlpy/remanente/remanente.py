@@ -55,11 +55,13 @@ class Remamente(ImportDataFrame):
         update_siif.update_ppto_gtos_desc_rf610()
         update_siif.update_comprobantes_rec_rci02()
         update_siif.update_deuda_flotante_rdeu012()
+        update_siif.update_deuda_flotante_rdeu012b2_c()
 
         update_sscc = update_db.UpdateSSCC(
             update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
             self.db_path + '/sscc.sqlite')
         update_sscc.update_ctas_ctes()
+        update_sscc.update_sdo_final_banco_invico()
 
         # update_icaro = update_db.UpdateIcaro(
         #     self.get_outside_path() + '/R Output/SQLite Files/ICARO.sqlite', 
@@ -72,33 +74,33 @@ class Remamente(ImportDataFrame):
         self.siif_desc_pres = self.import_siif_desc_pres(ejercicio_to=self.ejercicio)
 
     # --------------------------------------------------
-    def import_sdo_banco_invico(self, ejercicio:str = None):
-        PATH_SALDO_BCO =  os.path.join(self.get_invicoctrlpy_path(), 'remanente/saldos_sscc')
-        saldo_banco_sscc = []
-        for i in os.listdir(path = PATH_SALDO_BCO):
-            df = pd.read_csv(PATH_SALDO_BCO + "/" + i, index_col=False, 
-            header = None, usecols = [5] + list(range(11,15)), 
-            thousands = ".", decimal = ",", encoding="latin-1")
-            df.columns = ['ejercicio','cta_cte', 'descripcion', 'banco', 'saldo']
-            df['saldo'] = df.saldo.astype(float)
-            df["ejercicio"] = df.ejercicio.str[-4:].astype(str)
-            saldo_banco_sscc.append(df)
-        saldo_banco_sscc = pd.concat(saldo_banco_sscc)
-        map_to = self.ctas_ctes.loc[:,['map_to', 'sscc_cta_cte']]
-        saldo_banco_sscc = pd.merge(
-            saldo_banco_sscc, map_to, how='left',
-            left_on='cta_cte', right_on='sscc_cta_cte')
-        saldo_banco_sscc['cta_cte'] = saldo_banco_sscc['map_to']
-        saldo_banco_sscc.drop(['map_to', 'sscc_cta_cte'], axis='columns', inplace=True)
-        if ejercicio != None:
-            saldo_banco_sscc = saldo_banco_sscc.loc[saldo_banco_sscc['ejercicio'] == ejercicio]
-        saldo_banco_sscc.reset_index(drop=True, inplace=True)
-        return saldo_banco_sscc
+    def import_sdo_final_banco_invico(self) -> pd.DataFrame:
+        return super().import_sdo_final_banco_invico(ejercicio = self.ejercicio)
+
+    # --------------------------------------------------
+    def import_siif_rdeu012b2_c(self) -> pd.DataFrame:
+        return super().import_siif_rdeu012b2_c(mes_hasta = '12/' + self.ejercicio)
+
+    # --------------------------------------------------
+    def import_siif_ppto_gto_con_desc(self) -> pd.DataFrame:
+        df = super().import_siif_ppto_gto_con_desc(ejercicio = self.ejercicio)
+        df = df.loc[df['partida'].isin(['421', '422'])]
+        df = df.loc[df['fuente'] != '11']
+        df.drop([
+            'grupo', 'credito_original', 'comprometido', 
+            'pendiente', 'desc_part', 'desc_gpo'
+        ], axis=1, inplace=True)
+        df['remte'] = 0
+        df['mal_remte'] = 0
+        df['saldo_remte'] = df['saldo']
+        df['cc_remte'] = None
+        df['cc_mal_remte'] = None
+        return df
 
     # --------------------------------------------------
     def remanente_met_1(self):
         SALDO_UCAPFI = 4262062.77
-        banco_sscc = self.import_sdo_banco_invico(ejercicio=self.ejercicio)
+        banco_sscc = self.import_sdo_final_banco_invico()
         rdeu = self.import_siif_rdeu012(ejercicio=self.ejercicio)
         rdeu_max_mes = rdeu.loc[rdeu['fecha'] == max(rdeu['fecha'])].drop_duplicates(subset='mes_hasta')
         rdeu = rdeu.loc[rdeu['mes_hasta'] == rdeu_max_mes.iloc[0]['mes_hasta']]
