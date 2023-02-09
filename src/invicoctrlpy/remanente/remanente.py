@@ -82,20 +82,34 @@ class Remamente(ImportDataFrame):
         return super().import_siif_rdeu012b2_c(mes_hasta = '12/' + self.ejercicio)
 
     # --------------------------------------------------
-    def import_siif_ppto_gto_con_desc(self) -> pd.DataFrame:
+    def hoja_trabajo(self) -> pd.DataFrame:
         df = super().import_siif_ppto_gto_con_desc(ejercicio = self.ejercicio)
         df = df.loc[df['partida'].isin(['421', '422'])]
         df = df.loc[df['fuente'] != '11']
+        df['prog_con_desc'] = df['programa'] + ' - ' + df['desc_prog']
+        df['subprog_con_desc'] = df['subprograma'] + ' - ' + df['desc_subprog']
+        df['proy_con_desc'] = df['proyecto'] + ' - ' + df['desc_proy']
+        df['act_con_desc'] = df['actividad'] + ' - ' + df['desc_act']
+        df['estructura'] = df['estructura'].str[:-4]
         df.drop([
             'grupo', 'credito_original', 'comprometido', 
-            'pendiente', 'desc_part', 'desc_gpo'
+            'pendiente', 'desc_part', 'desc_gpo', 
+            'programa', 'desc_prog',
+            'subprograma', 'desc_subprog',
+            'proyecto', 'desc_proy',
+            'actividad', 'desc_act',
         ], axis=1, inplace=True)
         df['remte'] = 0
         df['mal_remte'] = 0
         df['saldo_remte'] = df['saldo']
         df['cc_remte'] = None
         df['cc_mal_remte'] = None
+        df['f_y_f'] = None
         return df
+
+    # --------------------------------------------------
+    def import_siif_rci02(self) -> pd.DataFrame:
+        return super().import_siif_rci02(ejercicio = self.ejercicio)
 
     # --------------------------------------------------
     def remanente_met_1(self):
@@ -126,7 +140,7 @@ class Remamente(ImportDataFrame):
 
     # --------------------------------------------------
     def remanente_met_2(self):
-        recursos = self.import_siif_rci02(ejercicio=self.ejercicio)
+        recursos = self.import_siif_rci02()
         gastos = self.import_siif_rf602(ejercicio=self.ejercicio)
         rem_met_2 = recursos.importe.groupby([recursos.fuente]).sum()
         rem_met_2 = pd.concat([rem_met_2, gastos.ordenado.groupby([gastos.fuente]).sum(),
@@ -140,20 +154,24 @@ class Remamente(ImportDataFrame):
 
     # --------------------------------------------------
     def remanente_met_2_hist(self):
-        recursos = self.import_siif_rci02()
+        recursos = super().import_siif_rci02()
         gastos = self.import_siif_rf602()
         rem_solicitado = recursos.loc[recursos.es_remanente == True].importe.groupby([recursos.ejercicio, recursos.fuente]).sum().to_frame()
+        rem_solicitado.reset_index(inplace=True)
+        rem_solicitado['ejercicio'] = (rem_solicitado['ejercicio'].astype(int) - 1).astype(str)
         rem_met_2_hist = recursos.importe.groupby([recursos.ejercicio, recursos.fuente]).sum()
         rem_met_2_hist = pd.concat([rem_met_2_hist, gastos.ordenado.groupby([gastos.ejercicio, gastos.fuente]).sum(),
-        gastos.saldo.groupby([gastos.ejercicio, gastos.fuente]).sum(), rem_solicitado.groupby(level=[1])['importe'].shift(-1)], axis=1)
-        rem_met_2_hist.columns = ["recursos", "gastos", "saldo_pres", "rte_solicitado"]
+        gastos.saldo.groupby([gastos.ejercicio, gastos.fuente]).sum()], axis=1)
+        rem_met_2_hist.reset_index(inplace=True)
+        rem_met_2_hist = rem_met_2_hist.merge(rem_solicitado, how='left', on=['ejercicio', 'fuente'], copy=False)
+        rem_met_2_hist.columns = ["ejercicio", "fuente", "recursos", "gastos", "saldo_pres", "rte_solicitado"]
         rem_met_2_hist["rte_met_2"] = rem_met_2_hist.recursos - rem_met_2_hist.gastos
         # rem_met_2_hist["mal_rte_met_2"] = rem_met_2_hist.saldo_pres- rem_met_2_hist.rte_met_2
         rem_met_2_hist["dif_rte_solicitado"] = rem_met_2_hist.rte_solicitado - rem_met_2_hist.rte_met_2
-        rem_met_2_hist = rem_met_2_hist[~rem_met_2_hist.index.isin(['11'], level=1)]
+        rem_met_2_hist = rem_met_2_hist[~rem_met_2_hist.fuente.isin(['11'])]
         #No sé qué pasó en Fuente 13 en el 2013, por eso lo filtro
-        rem_met_2_hist = rem_met_2_hist[~rem_met_2_hist.index.isin(['2011', '2012', '2013'], level=0)]
-        rem_met_2_hist.reset_index(inplace=True)
+        #rem_met_2_hist = rem_met_2_hist[~rem_met_2_hist.index.isin(['2011', '2012', '2013'], level=0)]
+        #rem_met_2_hist.reset_index(inplace=True)
         rem_met_2_hist.dropna(inplace=True)
         return rem_met_2_hist
 
