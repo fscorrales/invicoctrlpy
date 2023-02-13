@@ -83,21 +83,23 @@ class Remamente(ImportDataFrame):
 
     # --------------------------------------------------
     def hoja_trabajo(self) -> pd.DataFrame:
-        df = super().import_siif_ppto_gto_con_desc(ejercicio = self.ejercicio)
+        df = super().import_siif_rf602(ejercicio = self.ejercicio)
         df = df.loc[df['partida'].isin(['421', '422'])]
         df = df.loc[df['fuente'] != '11']
-        df['prog_con_desc'] = df['programa'] + ' - ' + df['desc_prog']
-        df['subprog_con_desc'] = df['subprograma'] + ' - ' + df['desc_subprog']
-        df['proy_con_desc'] = df['proyecto'] + ' - ' + df['desc_proy']
-        df['act_con_desc'] = df['actividad'] + ' - ' + df['desc_act']
         df['estructura'] = df['estructura'].str[:-4]
+        df_desc = super().import_icaro_desc_pres()
+        df_desc.rename(columns={
+            'actividad':'estructura',
+            'desc_prog':'prog_con_desc',
+            'desc_subprog':'subprog_con_desc',
+            'desc_proy':'proy_con_desc',
+            'desc_act':'act_con_desc',
+            }, inplace=True)
+        df = df.merge(df_desc, how='left', on='estructura', copy=False)
         df.drop([
             'grupo', 'credito_original', 'comprometido', 
-            'pendiente', 'desc_part', 'desc_gpo', 
-            'programa', 'desc_prog',
-            'subprograma', 'desc_subprog',
-            'proyecto', 'desc_proy',
-            'actividad', 'desc_act',
+            'pendiente', 'programa', 'subprograma', 
+            'proyecto', 'actividad', 
         ], axis=1, inplace=True)
         df['remte'] = 0
         df['mal_remte'] = 0
@@ -115,7 +117,7 @@ class Remamente(ImportDataFrame):
     def remanente_met_1(self):
         SALDO_UCAPFI = 4262062.77
         banco_sscc = self.import_sdo_final_banco_invico()
-        rdeu = self.import_siif_rdeu012(ejercicio=self.ejercicio)
+        rdeu = self.import_siif_rdeu012(ejercicio=self.ejercicio) #Solo el ejercicio?
         rdeu_max_mes = rdeu.loc[rdeu['fecha'] == max(rdeu['fecha'])].drop_duplicates(subset='mes_hasta')
         rdeu = rdeu.loc[rdeu['mes_hasta'] == rdeu_max_mes.iloc[0]['mes_hasta']]
         rem_met_1 = {
