@@ -15,17 +15,19 @@ Packages:
 
 import argparse
 import datetime as dt
+import os
 from dataclasses import dataclass
 
 import pandas as pd
 from datar import base, dplyr, f, tidyr
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
-import update_db
+from invicodb import update_db
 
 # --------------------------------------------------
 @dataclass
 class IcaroVsSIIF(ImportDataFrame):
     ejercicio:str = str(dt.datetime.now().year)
+    input_path:str = None
     db_path:str = None
     update_db:bool = False
 
@@ -39,7 +41,10 @@ class IcaroVsSIIF(ImportDataFrame):
 
     # --------------------------------------------------
     def update_sql_db(self):
-        update_path_input = self.get_update_path_input()
+        if self.input_path == None:
+            update_path_input = self.get_update_path_input()
+        else:
+            update_path_input = self.input_path
         
         update_siif = update_db.UpdateSIIF(
             update_path_input + '/Reportes SIIF', 
@@ -55,7 +60,8 @@ class IcaroVsSIIF(ImportDataFrame):
         update_sscc.update_ctas_ctes()
 
         update_icaro = update_db.UpdateIcaro(
-            self.get_outside_path() + '/R Output/SQLite Files/ICARO.sqlite', 
+            os.path.dirname(os.path.dirname(self.db_path))
+            + '/R Output/SQLite Files/ICARO.sqlite', 
             self.db_path + '/icaro.sqlite')
         update_icaro.migrate_icaro()
 

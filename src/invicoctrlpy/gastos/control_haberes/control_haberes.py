@@ -18,16 +18,16 @@ import datetime as dt
 from dataclasses import dataclass
 
 import pandas as pd
-import update_db
 from datar import base, dplyr, f, tidyr
-
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
+from invicodb import update_db
 
 
 @dataclass
 # --------------------------------------------------
 class ControlHaberes(ImportDataFrame):
     ejercicio:str = str(dt.datetime.now().year)
+    input_path:str = None
     db_path:str = None
     update_db:bool = False
 
@@ -41,7 +41,10 @@ class ControlHaberes(ImportDataFrame):
 
     # --------------------------------------------------
     def update_sql_db(self):
-        update_path_input = self.get_update_path_input()
+        if self.input_path == None:
+            update_path_input = self.get_update_path_input()
+        else:
+            update_path_input = self.input_path
 
         update_siif = update_db.UpdateSIIF(
             update_path_input + '/Reportes SIIF', 

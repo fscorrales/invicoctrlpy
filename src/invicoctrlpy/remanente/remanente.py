@@ -21,9 +21,8 @@ import datetime as dt
 from dataclasses import dataclass, field
 
 import pandas as pd
-import update_db
+from invicodb import update_db
 from datar import base, dplyr, f, tidyr
-import os
 
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 
@@ -32,6 +31,7 @@ from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 # --------------------------------------------------
 class Remamente(ImportDataFrame):
     ejercicio:str = str(dt.datetime.now().year)
+    input_path:str = None
     db_path:str = None
     update_db:bool = False
     siif_desc_pres: pd.DataFrame = field(init=False, repr=False)
@@ -46,7 +46,10 @@ class Remamente(ImportDataFrame):
 
     # --------------------------------------------------
     def update_sql_db(self):
-        update_path_input = self.get_update_path_input()
+        if self.input_path == None:
+            update_path_input = self.get_update_path_input()
+        else:
+            update_path_input = self.input_path
 
         update_siif = update_db.UpdateSIIF(
             update_path_input + '/Reportes SIIF', 
