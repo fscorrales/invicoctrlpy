@@ -67,7 +67,7 @@ class ImportDataFrame(HanglingPath):
         df = df.merge(df_subprog, how='left', on=['subprograma'], copy=False)
         df = df.merge(df_prog, how='left', on=['programa'], copy=False)
         # Combine number with description
-        df['desc_prog'] = df['actividad'].str[0:2] + ' - ' + df['desc_prog']
+        df['desc_prog'] = df['desc_prog']
         df.desc_subprog.fillna(value='', inplace=True)
         df['desc_subprog'] = df['actividad'].str[3:5] + ' - ' + df['desc_subprog']
         df['desc_proy'] = df['actividad'].str[6:8] + ' - ' + df['desc_proy']
