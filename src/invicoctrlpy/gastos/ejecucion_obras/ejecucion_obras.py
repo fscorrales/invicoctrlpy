@@ -30,8 +30,6 @@ class EjecucionObras(ImportDataFrame):
     update_db:bool = False
     siif_desc_pres:pd.DataFrame = field(init=False, repr=False)
     siif_ejec_obras:pd.DataFrame = field(init=False, repr=False)
-    icaro_desc_pres:pd.DataFrame = field(init=False, repr=False)
-    icaro_mod_basicos:pd.DataFrame = field(init=False, repr=False)
 
     # --------------------------------------------------
     def __post_init__(self):
@@ -64,7 +62,6 @@ class EjecucionObras(ImportDataFrame):
     def import_dfs(self):
         self.import_ctas_ctes()
         self.siif_desc_pres = self.import_siif_desc_pres(ejercicio_to=self.ejercicio)
-        self.icaro_desc_pres = self.import_icaro_desc_pres()
 
     # --------------------------------------------------
     def import_siif_obras_desc(self):
@@ -99,7 +96,10 @@ class EjecucionObras(ImportDataFrame):
             df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
             df.drop(labels=['estructura'], axis='columns', inplace=True)
         else:
-            df = df.merge(self.icaro_desc_pres, how='left', on='actividad', copy=False)
+            df = df.merge(
+                self.import_icaro_desc_pres(), how='left', 
+                on='actividad', copy=False
+            )
         df.reset_index(drop=True, inplace=True)
         return df
 
@@ -116,7 +116,10 @@ class EjecucionObras(ImportDataFrame):
             df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
             df.drop(labels=['estructura'], axis='columns', inplace=True)
         else:
-            df = df.merge(self.icaro_desc_pres, how='left', on='actividad', copy=False)
+            df = df.merge(
+                self.import_icaro_desc_pres(), how='left', 
+                on='actividad', copy=False
+            )
         df.reset_index(drop=True, inplace=True)
         return df
 
