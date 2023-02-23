@@ -78,8 +78,7 @@ class ControlRecursos(ImportDataFrame):
                             "130832-12", "334", "Macro", "Patagonia"]), 'RECUPEROS', 
                             'OTROS'))
         df.reset_index(drop=True, inplace=True)
-        self.sscc_banco_invico = df
-        return self.sscc_banco_invico
+        return df
 
     # --------------------------------------------------
     def import_siif_rci02(self):
@@ -94,18 +93,17 @@ class ControlRecursos(ImportDataFrame):
                         "130832-12", "334", "Macro", "Patagonia"]), 'RECUPEROS', 
                         'OTROS'))
         df.reset_index(drop=True, inplace=True)
-        self.siif_rci02 = df
-        return self.siif_rci02
+        return df
 
     # --------------------------------------------------
     def control_mes_grupo(self):
-        siif_mes_gpo = self.siif_rci02.copy()
+        siif_mes_gpo = self.import_siif_rci02()
         siif_mes_gpo = siif_mes_gpo >> \
             dplyr.select(f.mes, f.grupo, f.importe) >> \
             dplyr.group_by(f.mes, f.grupo) >> \
             dplyr.summarise(recursos_siif = base.sum_(f.importe),
                             _groups = 'drop')
-        sscc_mes_gpo = self.sscc_banco_invico.copy()
+        sscc_mes_gpo = self.import_banco_invico()
         sscc_mes_gpo = sscc_mes_gpo >> \
             dplyr.select(
                 f.mes, f.grupo, 
@@ -131,13 +129,13 @@ class ControlRecursos(ImportDataFrame):
 
     # --------------------------------------------------
     def control_mes_grupo_cta_cte(self):
-        siif_mes_gpo_cta_cte = self.siif_rci02.copy()
+        siif_mes_gpo_cta_cte = self.import_siif_rci02()
         siif_mes_gpo_cta_cte = siif_mes_gpo_cta_cte >> \
             dplyr.select(f.mes, f.grupo, f.cta_cte, f.importe) >> \
             dplyr.group_by(f.mes, f.grupo, f.cta_cte) >> \
             dplyr.summarise(recursos_siif = base.sum_(f.importe),
                             _groups = 'drop')
-        sscc_mes_gpo_cta_cte = self.sscc_banco_invico.copy()
+        sscc_mes_gpo_cta_cte = self.import_banco_invico()
         sscc_mes_gpo_cta_cte = sscc_mes_gpo_cta_cte >> \
             dplyr.select(
                 f.mes, f.grupo, f.cta_cte,

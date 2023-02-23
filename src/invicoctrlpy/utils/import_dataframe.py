@@ -421,6 +421,13 @@ class ImportDataFrame(HanglingPath):
         df = ComprobantesRecRci02().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
             df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)
+        map_to = self.ctas_ctes.loc[:,['map_to', 'siif_recursos_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='siif_recursos_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'siif_recursos_cta_cte'], axis='columns', inplace=True)        
         self.siif_rci02 = df
         return self.siif_rci02
 
