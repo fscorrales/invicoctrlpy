@@ -32,7 +32,6 @@ class ImportDataFrame(HanglingPath):
     siif_comprobantes:pd.DataFrame = field(init=False, repr=False)
     siif_comprobantes_haberes:pd.DataFrame = field(init=False, repr=False)
     siif_comprobantes_haberes_neto_rdeu:pd.DataFrame = field(init=False, repr=False)
-    siif_rci02:pd.DataFrame = field(init=False, repr=False)
     siif_rcocc31:pd.DataFrame = field(init=False, repr=False)
     sgf_resumen_rend:pd.DataFrame = field(init=False, repr=False)
     sgf_resumen_rend_cuit:pd.DataFrame = field(init=False, repr=False)
@@ -427,9 +426,8 @@ class ImportDataFrame(HanglingPath):
             df, map_to, how='left',
             left_on='cta_cte', right_on='siif_recursos_cta_cte')
         df['cta_cte'] = df['map_to']
-        df.drop(['map_to', 'siif_recursos_cta_cte'], axis='columns', inplace=True)        
-        self.siif_rci02 = df
-        return self.siif_rci02
+        df.drop(['map_to', 'siif_recursos_cta_cte'], axis='columns', inplace=True)
+        return df
 
     # --------------------------------------------------
     def import_siif_rcocc31(

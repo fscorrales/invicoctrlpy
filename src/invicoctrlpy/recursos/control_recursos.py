@@ -59,8 +59,6 @@ class ControlRecursos(ImportDataFrame):
     # --------------------------------------------------
     def import_dfs(self):
         self.import_ctas_ctes()
-        self.import_banco_invico()
-        self.import_siif_rci02()
 
     # --------------------------------------------------
     def import_banco_invico(self):
