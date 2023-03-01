@@ -87,6 +87,41 @@ class EjecucionObras(ImportDataFrame):
         return df
 
     # --------------------------------------------------
+    def import_siif_obras_desc_icaro(self):
+        df = super().import_siif_rf602(ejercicio=self.ejercicio)
+        df = df.loc[df['partida'].isin(['421', '422'])]
+        df = df.loc[df['ordenado'] > 0]
+        df.drop(
+            labels=['org', 'pendiente', 'programa', 
+            'subprograma', 'proyecto', 'actividad', 
+            'grupo'], 
+            axis=1, inplace=True
+            )
+        df['actividad'] = df['estructura'].str[0:11]
+        df.sort_values(by=['ejercicio', 'estructura'], ascending=[False, True],inplace=True)
+        df = df.merge(self.import_icaro_desc_pres(), how='left', on='actividad', copy=False)
+        df['estructura'] = df['actividad']
+        df.drop(
+            labels=['ejercicio', 'actividad', 'desc_subprog'], 
+            axis=1, inplace=True
+            )
+        df.rename(columns={
+            'desc_prog':'prog_con_desc',
+            'desc_proy':'proy_con_desc',
+            'desc_act':'act_con_desc',
+        }, inplace=True)
+        df = df >>\
+            dplyr.select(
+                f.estructura, f.partida, f.fuente,
+                f.prog_con_desc,  
+                f.proy_con_desc, f.act_con_desc,
+                dplyr.everything()
+            )
+        df = pd.DataFrame(df)
+        df.reset_index(drop=True, inplace=True)
+        return df
+
+    # --------------------------------------------------
     def import_icaro_carga_desc(self, es_desc_siif:bool = True):
         df = super().import_icaro_carga(neto_pa6=True)
         df = df.loc[df['partida'].isin(['421', '422'])]
