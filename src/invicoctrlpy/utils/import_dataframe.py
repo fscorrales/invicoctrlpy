@@ -5,6 +5,8 @@ import pandas as pd
 from datar import base, dplyr, f
 from invicodatpy.icaro.migrate_icaro import MigrateIcaro
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
+from invicodatpy.sgv.all import (SaldoBarrio, SaldoBarrioVariacion,
+                                 SaldoRecuperosCobrarVariacion)
 from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   ComprobantesRecRci02, DeudaFlotanteRdeu012,
                                   DeudaFlotanteRdeu012b2C,
@@ -14,7 +16,6 @@ from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   ResumenFdosRfondo07tp)
 from invicodatpy.slave.migrate_slave import MigrateSlave
 from invicodatpy.sscc.all import BancoINVICO, CtasCtes, SdoFinalBancoINVICO
-from invicodatpy.sgv.all import SaldoBarrioVariacion, SaldoRecuperosCobrarVariacion
 
 from .hangling_path import HanglingPath
 
@@ -598,6 +599,13 @@ class ImportDataFrame(HanglingPath):
             left_on='cta_cte', right_on='sscc_cta_cte')
         df['cta_cte'] = df['map_to']
         df.drop(['map_to', 'sscc_cta_cte'], axis='columns', inplace=True)
+        return df
+
+    # --------------------------------------------------
+    def import_saldo_barrio(self, ejercicio:str = None) -> pd.DataFrame:
+        df = SaldoBarrio().from_sql(self.db_path + '/sgv.sqlite') 
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] <= ejercicio]
         return df
 
     # --------------------------------------------------
