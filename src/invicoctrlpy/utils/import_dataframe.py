@@ -261,7 +261,6 @@ class ImportDataFrame(HanglingPath):
             df = df.loc[df['ejercicio'] == ejercicio]
         return df
 
-
     # --------------------------------------------------
     def import_siif_rfondo07tp_pa6(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenFdosRfondo07tp().from_sql(self.db_path + '/siif.sqlite')
@@ -300,6 +299,21 @@ class ImportDataFrame(HanglingPath):
         df.drop(['map_to', 'siif_gastos_cta_cte'], axis='columns', inplace=True)
         self.siif_comprobantes = df
         return self.siif_comprobantes
+
+    def import_siif_comprobantes_fondos_perm(
+        self, ejercicio:str = None
+        ) -> pd.DataFrame:
+        self.import_siif_comprobantes(ejercicio=ejercicio)
+        df = self.siif_comprobantes.copy()
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] == ejercicio]
+        df = df.loc[df['nro_fondo'].notnull()]
+        df = df.loc[df['cta_cte'] == '130832-05']
+        # nro_expte = df.loc[df['nro_fondo'].notnull()]
+        # nro_expte = nro_expte.loc[nro_expte['cta_cte'] == '130832-05']
+        # nro_expte = nro_expte['nro_expte'].unique()
+        # df = df.loc[df['nro_expte'].isin(nro_expte)]
+        return df
 
     def import_siif_comprobantes_haberes(
         self, ejercicio:str = None, neto_art:bool = False,
