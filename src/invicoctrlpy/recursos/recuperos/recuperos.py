@@ -116,6 +116,35 @@ class Recuperos(ImportDataFrame):
         fig.update_layout(showlegend = False)
         fig.show()
 
+    def saldo_motivo_mas_amort(self) -> pd.DataFrame:
+        df = super().import_saldo_motivo(self.ejercicio)
+        amort = self.control_suma_saldo_barrio_variacion()
+        amort.reset_index(drop=False, inplace=True)
+        amort = amort.loc[:, ['ejercicio', 'amortizacion']]
+        amort['cod_motivo'] = '-'
+        amort['motivo'] = 'AMORTIZACION'
+        amort.rename(columns={'amortizacion':'importe'}, inplace=True, copy=False)
+        df = pd.concat([df, amort], axis=0)
+        return df
+    
+    def ranking_saldo_motivos_actual(self) -> pd.DataFrame:
+        df = self.saldo_motivo_mas_amort()
+        df = df.loc[df['ejercicio'] == self.ejercicio]
+        df['importe'] = df['importe'].abs()
+        df['participacion'] = (df['importe'] / df['importe'].sum()) * 100
+        df.sort_values(by='importe', ascending=False, inplace=True)
+        return df
+    
+    def control_motivos_actuales_otros_ejercicio(self) -> pd.DataFrame:
+        df = self.saldo_motivo_mas_amort()
+        df['importe'] = df['importe'].abs()
+        df['participacion'] = df['importe'] / df.groupby('ejercicio')['importe'].transform('sum')
+        df['participacion'] = df['participacion'] * 100
+        motivos_act = self.ranking_saldo_motivos_actual().head()['cod_motivo'].values.tolist()
+        df = df.loc[df['cod_motivo'].isin(motivos_act)]
+        df.sort_values(by=['ejercicio', 'cod_motivo'], ascending=[False, True], inplace=True)
+        return df
+
     def control_saldo_final_distintos_reportes(self):
         df_var = self.import_saldo_recuperos_cobrar_variacion(self.ejercicio)
         df_var = df_var.loc[df_var['concepto'] == 'SALDO AL FINAL:', ['ejercicio', 'importe']]
