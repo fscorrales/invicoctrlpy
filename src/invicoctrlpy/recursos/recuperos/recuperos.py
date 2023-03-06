@@ -70,6 +70,7 @@ class Recuperos(ImportDataFrame):
         update_recuperos.update_resumen_facturado()
         update_recuperos.update_resumen_recaudado()
 
+    # --------------------------------------------------
     def control_saldos_recuperos_cobrar_variacion(self):
         df = self.import_saldo_recuperos_cobrar_variacion(self.ejercicio)
         df = df.loc[df['concepto'].isin(['SALDO AL INICIO:', 'SALDO AL FINAL:'])]
@@ -96,6 +97,7 @@ class Recuperos(ImportDataFrame):
         # fig.update_layout(showlegend = False)
         # fig.show()
 
+    # --------------------------------------------------
     def control_suma_saldo_barrio_variacion(self):
         df = self.import_saldo_barrio_variacion(self.ejercicio)
         df = df.groupby(["ejercicio"])[["saldo_inicial", "amortizacion", "cambios", "saldo_final"]].sum()
@@ -116,11 +118,18 @@ class Recuperos(ImportDataFrame):
         fig.update_layout(showlegend = False)
         fig.show()
 
+    # --------------------------------------------------
     def saldo_motivo_mas_amort(self) -> pd.DataFrame:
         df = super().import_saldo_motivo(self.ejercicio)
-        amort = self.control_suma_saldo_barrio_variacion()
-        amort.reset_index(drop=False, inplace=True)
-        amort = amort.loc[:, ['ejercicio', 'amortizacion']]
+        # amort = self.control_suma_saldo_barrio_variacion()
+        # amort.reset_index(drop=False, inplace=True)
+        # amort = amort.loc[:, ['ejercicio', 'amortizacion']]
+        # amort['cod_motivo'] = '-'
+        # amort['motivo'] = 'AMORTIZACION'
+        # amort.rename(columns={'amortizacion':'importe'}, inplace=True, copy=False)
+        amort = super().import_resumen_recaudado(self.ejercicio)
+        amort = amort.groupby(["ejercicio"])[["amortizacion"]].sum()
+        df.reset_index(drop=False, inplace=True) 
         amort['cod_motivo'] = '-'
         amort['motivo'] = 'AMORTIZACION'
         amort.rename(columns={'amortizacion':'importe'}, inplace=True, copy=False)
@@ -145,6 +154,7 @@ class Recuperos(ImportDataFrame):
         df.sort_values(by=['ejercicio', 'cod_motivo'], ascending=[False, True], inplace=True)
         return df
 
+    # --------------------------------------------------
     def control_saldo_final_distintos_reportes(self):
         df_var = self.import_saldo_recuperos_cobrar_variacion(self.ejercicio)
         df_var = df_var.loc[df_var['concepto'] == 'SALDO AL FINAL:', ['ejercicio', 'importe']]

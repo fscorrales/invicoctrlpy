@@ -6,7 +6,7 @@ from datar import base, dplyr, f
 from invicodatpy.icaro.migrate_icaro import MigrateIcaro
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
 from invicodatpy.sgv.all import (SaldoBarrio, SaldoBarrioVariacion,
-                                 SaldoRecuperosCobrarVariacion, SaldoMotivo)
+                                 SaldoRecuperosCobrarVariacion, SaldoMotivo, ResumenRecaudado)
 from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   ComprobantesRecRci02, DeudaFlotanteRdeu012,
                                   DeudaFlotanteRdeu012b2C,
@@ -639,6 +639,13 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_saldo_motivo(self, ejercicio:str = None) -> pd.DataFrame:
         df = SaldoMotivo().from_sql(self.db_path + '/sgv.sqlite') 
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] <= ejercicio]
+        return df
+
+    # --------------------------------------------------
+    def import_resumen_recaudado(self, ejercicio:str = None) -> pd.DataFrame:
+        df = ResumenRecaudado().from_sql(self.db_path + '/sgv.sqlite') 
         if ejercicio != None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
