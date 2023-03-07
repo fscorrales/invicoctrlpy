@@ -84,7 +84,7 @@ class Recuperos(ImportDataFrame):
         # sns.barplot(data=df, x='ejercicio', y='saldo_actual')
         fig = px.bar(
             x=df['ejercicio'], y=df['saldo_actual'],
-            title = 'Gráfico 1: Recuperos a Cobrar',
+            title = 'Recuperos a Cobrar',
             labels={'x':'Ejercicio','y':'miles de millones de $'}
         )
         fig.update_layout(showlegend = False)
@@ -136,20 +136,22 @@ class Recuperos(ImportDataFrame):
         df = pd.concat([df, amort], axis=0)
         return df
     
-    def ranking_saldo_motivos_actual(self) -> pd.DataFrame:
+    def ranking_saldo_motivos(self, ejercicio:str = None) -> pd.DataFrame:
         df = self.saldo_motivo_mas_amort()
-        df = df.loc[df['ejercicio'] == self.ejercicio]
+        if ejercicio == None:
+            ejercicio = self.ejercicio
+        df = df.loc[df['ejercicio'] == ejercicio]
         df['importe'] = df['importe'].abs()
         df['participacion'] = (df['importe'] / df['importe'].sum()) * 100
         df.sort_values(by='importe', ascending=False, inplace=True)
         return df
     
-    def control_motivos_actuales_otros_ejercicio(self, nro_rank:int = 5) -> pd.DataFrame:
+    def part_motivos_base_otros_ejercicio(self, nro_rank:int = 5) -> pd.DataFrame:
         df = self.saldo_motivo_mas_amort()
         df['importe'] = df['importe'].abs()
         df['participacion'] = df['importe'] / df.groupby('ejercicio')['importe'].transform('sum')
         df['participacion'] = df['participacion'] * 100
-        motivos_act = self.ranking_saldo_motivos_actual().head(nro_rank)['cod_motivo'].values.tolist()
+        motivos_act = self.ranking_saldo_motivos().head(nro_rank)['cod_motivo'].values.tolist()
         df_motivos = df.loc[df['cod_motivo'].isin(motivos_act)]
         df_otros = df.loc[~df['cod_motivo'].isin(motivos_act)].groupby('ejercicio')[['importe', 'participacion']].sum()
         df_otros.reset_index(drop=False, inplace=True)
@@ -158,6 +160,18 @@ class Recuperos(ImportDataFrame):
         df = pd.concat([df_motivos, df_otros], axis=0) 
         df.sort_values(by=['ejercicio', 'participacion'], ascending=[False, False], inplace=True)
         return df
+
+    def graficar_part_motivos_base_otros_ejercicio(self):
+        df = self.part_motivos_base_otros_ejercicio()
+        df = df.loc[df['ejercicio'] > '2013']
+        df.sort_values(by=['ejercicio', 'participacion'], ascending=[True, True], inplace=True)
+        fig = px.bar(
+            x=df['ejercicio'], y=df['participacion'], color=df['motivo'],
+            title = 'Participación Motios en Variación Saldo Recuperos Cobrar (Base ' + self.ejercicio +')' ,
+            labels={'x':'Ejercicio','y':'%'}
+        )
+        fig.update_layout(showlegend = True)
+        fig.show()
 
     # --------------------------------------------------
     def control_saldo_final_distintos_reportes(self):
@@ -176,8 +190,36 @@ class Recuperos(ImportDataFrame):
         # df['dif_saldo_final'] = df['dif_saldo_final'] / 1000
         fig = px.bar(
             x=df['ejercicio'], y=df['dif_saldo_final'],
-            title = 'Gráfico 2: Diferencia entre saldos finales',
+            title = 'Diferencia entre saldos finales',
             labels={'x':'Ejercicio','y':'$'}
+        )
+        fig.update_layout(showlegend = False)
+        fig.show()
+    
+    # --------------------------------------------------
+    def graficar_facturado_vs_recaudado(self):
+        facturado = self.import_resumen_facturado(self.ejercicio)
+        facturado = facturado.groupby('ejercicio')['facturado_total'].sum().to_frame()
+        facturado['concepto'] = 'facturado'
+        facturado.rename(columns={'facturado_total':'importe'}, inplace=True)
+        recaudado = self.import_resumen_recaudado(self.ejercicio)
+        recaudado = recaudado.groupby('ejercicio')['recaudado_total'].sum().to_frame()
+        recaudado['concepto'] = 'recaudado'
+        recaudado.rename(columns={'recaudado_total':'importe'}, inplace=True)
+        df = pd.concat([facturado, recaudado], axis=0)
+        df.reset_index(drop=False, inplace=True)
+        # Add saldo recuperos a cobrar
+        saldo = self.import_saldo_barrio(self.ejercicio)
+        saldo = saldo.groupby(['ejercicio']).saldo_actual.sum().to_frame()
+        saldo.reset_index(drop=False, inplace=True) 
+        df = df.merge(saldo, on='ejercicio', copy=False)
+        df.reset_index(drop=False, inplace=True)
+        df['participacion'] = (df['importe'] / df['saldo_actual']) * 100
+        df = df.loc[df['ejercicio'] > '2010']
+        fig = px.line(
+            x=df['ejercicio'], y=df['participacion'], color=df['concepto'],
+            title = 'Facturado VS Recaudado Sist. Recuperos',
+            labels={'x':'Ejercicio','y':'%'}
         )
         fig.update_layout(showlegend = False)
         fig.show()
