@@ -129,8 +129,8 @@ class Recuperos(ImportDataFrame):
         # amort.rename(columns={'amortizacion':'importe'}, inplace=True, copy=False)
         amort = super().import_resumen_recaudado(self.ejercicio)
         amort = amort.groupby(["ejercicio"])[["amortizacion"]].sum()
-        df.reset_index(drop=False, inplace=True) 
-        amort['cod_motivo'] = '-'
+        amort.reset_index(drop=False, inplace=True) 
+        amort['cod_motivo'] = 'AM'
         amort['motivo'] = 'AMORTIZACION'
         amort.rename(columns={'amortizacion':'importe'}, inplace=True, copy=False)
         df = pd.concat([df, amort], axis=0)
@@ -144,14 +144,19 @@ class Recuperos(ImportDataFrame):
         df.sort_values(by='importe', ascending=False, inplace=True)
         return df
     
-    def control_motivos_actuales_otros_ejercicio(self) -> pd.DataFrame:
+    def control_motivos_actuales_otros_ejercicio(self, nro_rank:int = 5) -> pd.DataFrame:
         df = self.saldo_motivo_mas_amort()
         df['importe'] = df['importe'].abs()
         df['participacion'] = df['importe'] / df.groupby('ejercicio')['importe'].transform('sum')
         df['participacion'] = df['participacion'] * 100
-        motivos_act = self.ranking_saldo_motivos_actual().head()['cod_motivo'].values.tolist()
-        df = df.loc[df['cod_motivo'].isin(motivos_act)]
-        df.sort_values(by=['ejercicio', 'cod_motivo'], ascending=[False, True], inplace=True)
+        motivos_act = self.ranking_saldo_motivos_actual().head(nro_rank)['cod_motivo'].values.tolist()
+        df_motivos = df.loc[df['cod_motivo'].isin(motivos_act)]
+        df_otros = df.loc[~df['cod_motivo'].isin(motivos_act)].groupby('ejercicio')[['importe', 'participacion']].sum()
+        df_otros.reset_index(drop=False, inplace=True)
+        df_otros['cod_motivo'] = 'OT'
+        df_otros['motivo'] = 'OTROS MOTIVOS'
+        df = pd.concat([df_motivos, df_otros], axis=0) 
+        df.sort_values(by=['ejercicio', 'participacion'], ascending=[False, False], inplace=True)
         return df
 
     # --------------------------------------------------
