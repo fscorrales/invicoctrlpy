@@ -251,6 +251,12 @@ class Recuperos(ImportDataFrame):
         fig.show()
 
     # --------------------------------------------------
+    def control_recaudado_real_vs_sist_recuperos(self):
+        banco = self.import_banco_invico()
+        banco = banco.loc[banco['ejercicio'] <= self.ejercicio]
+        banco
+
+    # --------------------------------------------------
     def graficar_pend_acreditacion_recaudado(self):
         recaudado = self.import_resumen_recaudado(self.ejercicio)
         recaudado = recaudado.groupby('ejercicio')[['pend_acreditacion', 'recaudado_total']].sum()

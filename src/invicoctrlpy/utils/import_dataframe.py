@@ -293,7 +293,10 @@ class ImportDataFrame(HanglingPath):
         df = JoinComprobantesGtosGpoPart().from_sql(
             self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'].isin(ejercicio)]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin(list(ejercicio))]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'siif_gastos_cta_cte']]
         df = pd.merge(
@@ -310,7 +313,10 @@ class ImportDataFrame(HanglingPath):
         self.import_siif_comprobantes(ejercicio=ejercicio)
         df = self.siif_comprobantes.copy()
         if ejercicio != None:
-            df = df.loc[df['ejercicio'].isin(ejercicio)]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin(list(ejercicio))]
         df = df.loc[df['nro_fondo'].notnull()]
         df = df.loc[df['cta_cte'] == '130832-05']
         # nro_expte = df.loc[df['nro_fondo'].notnull()]
