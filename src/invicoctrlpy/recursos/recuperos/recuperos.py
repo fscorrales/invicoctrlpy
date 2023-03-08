@@ -174,6 +174,32 @@ class Recuperos(ImportDataFrame):
         fig.show()
 
     # --------------------------------------------------
+    def control_motivo_actualizacion_semestral(self):
+        df = self.import_saldo_motivo_actualizacion_semetral(self.ejercicio)
+        df = df.loc[df['ejercicio'] == self.ejercicio]
+        df['participacion'] = (df['importe'] / df['importe'].sum()) * 100
+        df.reset_index(drop=True, inplace=True)
+        #Add amortizacion acumulada
+        amort = self.import_saldo_barrio_variacion(self.ejercicio).groupby('cod_barrio')[['amortizacion']].sum()
+        amort = amort['amortizacion'].abs()
+        # amort.reset_index(drop=False, inplace=True)
+        df = df.merge(right=amort, on='cod_barrio', copy=False)
+        #Add first ejercicio
+        first_ejercicio = self.import_saldo_barrio(self.ejercicio)
+        first_ejercicio = first_ejercicio.loc[first_ejercicio['saldo_actual'] > 0]
+        first_ejercicio.sort_values(by='ejercicio', ascending=True, inplace=True)
+        first_ejercicio.drop_duplicates(subset=['cod_barrio'], keep='first', inplace=True)
+        first_ejercicio = first_ejercicio.loc[:,['ejercicio', 'cod_barrio']]
+        first_ejercicio.rename(columns={'ejercicio':'alta'}, copy=False, inplace=True)
+        df = df.merge(right=first_ejercicio, on='cod_barrio', copy=False)
+        df.rename(columns={'amortizacion':'amort_acum'}, copy=False, inplace=True)
+        df.sort_values(by='participacion', ascending=False, inplace=True)
+        ctrl = df.copy()
+        ctrl = ctrl.loc[ctrl['alta'] != self.ejercicio]
+        ctrl = ctrl.loc[ctrl['amort_acum'] == 0]
+        return ctrl
+
+    # --------------------------------------------------
     def control_saldo_final_distintos_reportes(self):
         df_var = self.import_saldo_recuperos_cobrar_variacion(self.ejercicio)
         df_var = df_var.loc[df_var['concepto'] == 'SALDO AL FINAL:', ['ejercicio', 'importe']]
@@ -218,8 +244,78 @@ class Recuperos(ImportDataFrame):
         df = df.loc[df['ejercicio'] > '2010']
         fig = px.line(
             x=df['ejercicio'], y=df['participacion'], color=df['concepto'],
-            title = 'Facturado VS Recaudado Sist. Recuperos',
+            title = 'Facturado VS Recaudado relativos al Total Recuperos a Cobrar (Sist. Recuperos)',
+            labels={'x':'Ejercicio','y':'%'}
+        )
+        fig.update_layout(showlegend = True)
+        fig.show()
+
+    # --------------------------------------------------
+    def graficar_pend_acreditacion_recaudado(self):
+        recaudado = self.import_resumen_recaudado(self.ejercicio)
+        recaudado = recaudado.groupby('ejercicio')[['pend_acreditacion', 'recaudado_total']].sum()
+        recaudado.reset_index(drop=False, inplace=True)
+        df = recaudado
+        df['participacion'] = df['pend_acreditacion'].abs() / df['recaudado_total'] *100
+        df = recaudado
+        df = df.loc[df['ejercicio'] > '2010']
+        fig = px.line(
+            x=df['ejercicio'], y=df['participacion'],
+            title = 'Pendiente de Acreditación en términos relativos al Total Recaudado (Sist. Recuperos)',
             labels={'x':'Ejercicio','y':'%'}
         )
         fig.update_layout(showlegend = False)
+        fig.show()
+
+    # --------------------------------------------------
+    def graficar_amortizacion_recaudado(self):
+        recaudado = self.import_resumen_recaudado(self.ejercicio)
+        recaudado = recaudado.groupby('ejercicio')[['amortizacion', 'recaudado_total']].sum()
+        recaudado.reset_index(drop=False, inplace=True)
+        df = recaudado
+        df['participacion'] = df['amortizacion'].abs() / df['recaudado_total'] *100
+        df = recaudado
+        df = df.loc[df['ejercicio'] > '2010']
+        fig = px.line(
+            x=df['ejercicio'], y=df['participacion'],
+            title = 'Amortización Real en términos relativos al Total Recaudado (Sist. Recuperos)',
+            labels={'x':'Ejercicio','y':'%'}
+        )
+        fig.update_layout(showlegend = False)
+        fig.show()
+
+
+    # --------------------------------------------------
+    def graficar_composicion_recaudado_actual(self, nro_rank:int = 5):
+        recaudado = self.import_resumen_recaudado(self.ejercicio)
+        recaudado = recaudado.groupby('ejercicio')[[
+            'amortizacion', 'int_financiero', 'int_mora', 
+            'gtos_adm', 'seg_incendio', 'seg_vida', 
+            'subsidio', 'pago_amigable', 'escritura',
+            'pend_acreditacion'
+        ]].sum()
+        recaudado.reset_index(drop=False, inplace=True)
+        recaudado = recaudado.loc[recaudado['ejercicio'] == self.ejercicio]
+        recaudado.drop(columns=['ejercicio'], inplace=True)
+        concepto_list=list(recaudado.columns)
+        recaudado = pd.melt(
+            recaudado, value_vars=concepto_list, var_name='concepto',
+            value_name='importe', ignore_index=True
+        )
+        recaudado['importe'] = recaudado['importe'].abs()
+        recaudado['participacion'] = (recaudado['importe'] / recaudado['importe'].sum()) *100
+        df = recaudado.copy()
+        df.sort_values(by='participacion', ascending=False, inplace=True)
+        df = df.head(nro_rank)
+        df_otros = pd.DataFrame([{
+            'concepto':'otros', 
+            'importe': recaudado['importe'].sum() - df['importe'].sum(),
+            'participacion': 100 - df['participacion'].sum()
+        }])
+        df = pd.concat([df, df_otros], axis=0) 
+        fig = px.pie(
+            values=df['importe'], names=df['concepto'],
+            title = 'Composición Recaudado del Ejercicio (Sist. Recuperos)',
+        )
+        fig.update_layout(showlegend = True)
         fig.show()
