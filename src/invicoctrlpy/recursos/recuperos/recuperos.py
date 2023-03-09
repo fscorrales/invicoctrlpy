@@ -50,6 +50,7 @@ class Recuperos(ImportDataFrame):
             self.get_db_path()
         if self.update_db:
             self.update_sql_db()
+        self.import_dfs()
 
     # --------------------------------------------------
     def update_sql_db(self):
@@ -69,6 +70,10 @@ class Recuperos(ImportDataFrame):
         update_recuperos.update_barrios_nuevos()
         update_recuperos.update_resumen_facturado()
         update_recuperos.update_resumen_recaudado()
+
+    # --------------------------------------------------
+    def import_dfs(self):
+        self.import_ctas_ctes()
 
     # --------------------------------------------------
     def control_saldos_recuperos_cobrar_variacion(self):
@@ -254,7 +259,29 @@ class Recuperos(ImportDataFrame):
     def control_recaudado_real_vs_sist_recuperos(self):
         banco = self.import_banco_invico()
         banco = banco.loc[banco['ejercicio'] <= self.ejercicio]
-        banco
+        banco = banco.loc[banco['cod_imputacion'] == '002']
+        banco = banco.groupby(['mes'])[['importe']].sum()
+        banco.reset_index(drop=False, inplace=True)
+        banco.rename(columns={'importe':'banco_real'}, inplace=True)
+        recaudado = self.import_resumen_recaudado(self.ejercicio)
+        recaudado = recaudado.groupby(['mes'])[['recaudado_total']].sum()
+        recaudado.reset_index(drop=False, inplace=True)
+        recaudado.rename(columns={'recaudado_total':'sist_recuperos'}, inplace=True)
+        df = banco.merge(recaudado, how='left', on='mes', copy=False)
+        df.reset_index(drop=True, inplace=True)
+        df['dif'] = df['banco_real'] - df['sist_recuperos']
+        df['participacion'] = (df['dif'] / df['banco_real']) * 100
+        return df
+
+    def graficar_recaudado_real_vs_sist_recuperos(self):
+        df = self.control_recaudado_real_vs_sist_recuperos()
+        fig = px.line(
+            x=df['mes'], y=df['participacion'],
+            title = 'Diferencia Banco Real VS Sist. Recuperos como porcentaje del Banco Real',
+            labels={'x':'Mes','y':'%'}
+        )
+        fig.update_layout(showlegend = False)
+        fig.show()
 
     # --------------------------------------------------
     def graficar_pend_acreditacion_recaudado(self):
