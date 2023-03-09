@@ -182,6 +182,11 @@ class ImportDataFrame(HanglingPath):
         return df
 
     # --------------------------------------------------
+    def import_icaro_proveedores(self) -> pd.DataFrame:
+        df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'proveedores')  
+        return df
+
+    # --------------------------------------------------
     def import_siif_rdeu012(self, ejercicio:str = None) -> pd.DataFrame:
         df = DeudaFlotanteRdeu012().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
@@ -210,7 +215,10 @@ class ImportDataFrame(HanglingPath):
     def import_siif_rf602(self, ejercicio:str = None) -> pd.DataFrame:
         df = PptoGtosFteRf602().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         self.siif_rf602 = df
         return self.siif_rf602
 
@@ -218,7 +226,10 @@ class ImportDataFrame(HanglingPath):
     def import_siif_desc_pres(self, ejercicio_to:str = None) -> pd.DataFrame:
         df = PptoGtosDescRf610().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio_to != None:
-            df = df.loc[df.ejercicio.astype(int) <= int(ejercicio_to)]
+            if isinstance(ejercicio_to, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio_to)]
+            else:
+                df = df.loc[df.ejercicio.astype(int) <= int(ejercicio_to)]
         df.sort_values(by=['ejercicio', 'estructura'], 
         inplace=True, ascending=[False, True])        
         # Programas únicos
@@ -262,7 +273,10 @@ class ImportDataFrame(HanglingPath):
     def import_siif_ppto_gto_con_desc(self, ejercicio:str = None) -> pd.DataFrame:
         df = JoinPptoGtosFteDesc().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         return df
 
     # --------------------------------------------------

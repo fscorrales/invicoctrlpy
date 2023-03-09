@@ -65,9 +65,9 @@ class EjecucionObras(ImportDataFrame):
 
     # --------------------------------------------------
     def import_siif_obras_desc(self):
-        df = super().import_siif_rf602()
+        df = super().import_siif_rf602(self.ejercicio)
         df = df.loc[df['partida'].isin(['421', '422'])]
-        df = df.loc[df['ordenado'] > 0]
+        #df = df.loc[df['ordenado'] > 0]
         df.sort_values(by=['ejercicio', 'estructura'], ascending=[False, True],inplace=True)
         df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
         df.drop(
@@ -122,10 +122,15 @@ class EjecucionObras(ImportDataFrame):
         return df
 
     # --------------------------------------------------
-    def import_icaro_carga_desc(self, es_desc_siif:bool = True):
+    def import_icaro_carga_desc(
+        self, es_desc_siif:bool = True
+    ):
         df = super().import_icaro_carga(neto_pa6=True)
         df = df.loc[df['partida'].isin(['421', '422'])]
-        df = df.loc[df.ejercicio.astype(int) <= int(self.ejercicio)]
+        if isinstance(self.ejercicio, list):
+            df = df.loc[df['ejercicio'].isin(self.ejercicio)]
+        else:
+            df = df.loc[df.ejercicio.astype(int) <= int(self.ejercicio)]
         if es_desc_siif:
             df['estructura'] = df['actividad'] + '-' + df['partida']
             df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
@@ -136,6 +141,10 @@ class EjecucionObras(ImportDataFrame):
                 on='actividad', copy=False
             )
         df.reset_index(drop=True, inplace=True)
+        prov = super().import_icaro_proveedores()
+        prov = prov.loc[:, ['cuit', 'desc_prov']]
+        prov.rename(columns={'desc_prov':'proveedor'}, inplace=True)
+        df = df.merge(prov, how='left', on='cuit', copy=False)
         return df
 
     # --------------------------------------------------
