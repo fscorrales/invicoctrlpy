@@ -167,6 +167,10 @@ class EjecucionObras(ImportDataFrame):
                 self.import_icaro_desc_pres(), how='left', 
                 on='actividad', copy=False
             )
+        prov = super().import_icaro_proveedores()
+        prov = prov.loc[:, ['cuit', 'desc_prov']]
+        prov.rename(columns={'desc_prov':'proveedor'}, inplace=True)
+        df = df.merge(prov, how='left', on='cuit', copy=False)
         df.reset_index(drop=True, inplace=True)
         return df
 
