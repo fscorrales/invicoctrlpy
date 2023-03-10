@@ -148,8 +148,11 @@ class EjecucionObras(ImportDataFrame):
         return df
 
     # --------------------------------------------------
-    def import_icaro_mod_basicos(self, es_desc_siif:bool = True):
-        df = super().import_icaro_carga(neto_reg=False, neto_pa6=True)
+    def import_icaro_mod_basicos(
+            self, es_desc_siif:bool = True, 
+            neto_reg:bool = False, neto_pa6:bool = True
+    ):
+        df = super().import_icaro_carga(neto_reg=neto_reg, neto_pa6=neto_pa6)
         df = df.loc[df['actividad'].str.startswith('29')]
         df = df.loc[df.ejercicio.astype(int) <= int(self.ejercicio)]
         df_obras = super().import_icaro_obras()
