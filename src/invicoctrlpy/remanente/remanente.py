@@ -21,7 +21,7 @@ import datetime as dt
 from dataclasses import dataclass, field
 
 import pandas as pd
-from invicodb import update_db
+from invicodb.update import update_db
 from datar import base, dplyr, f, tidyr
 
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
