@@ -459,7 +459,12 @@ class ImportDataFrame(HanglingPath):
     def import_siif_rci02(self, ejercicio:str = None) -> pd.DataFrame:
         df = ComprobantesRecRci02().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
+        # if ejercicio != None:
+        #     df = df.loc[df['ejercicio'] == ejercicio]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'siif_recursos_cta_cte']]
         df = pd.merge(
@@ -613,8 +618,13 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_banco_invico(self, ejercicio:str = None) -> pd.DataFrame:
         df = BancoINVICO().from_sql(self.db_path + '/sscc.sqlite')
-        if ejercicio != None:  
-            df = df.loc[df['ejercicio'] == ejercicio]
+        if ejercicio != None:
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
+        # if ejercicio != None:  
+        #     df = df.loc[df['ejercicio'] == ejercicio]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'sscc_cta_cte']]
         df = pd.merge(
