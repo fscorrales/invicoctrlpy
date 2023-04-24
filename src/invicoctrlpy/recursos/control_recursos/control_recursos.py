@@ -25,7 +25,7 @@ from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 @dataclass
 # --------------------------------------------------
 class ControlRecursos(ImportDataFrame):
-    ejercicio:str = str(dt.datetime.now().year)
+    ejercicio:str = None
     input_path:str = None
     db_path:str = None
     update_db:bool = False
@@ -36,6 +36,8 @@ class ControlRecursos(ImportDataFrame):
             self.get_db_path()
         if self.update_db:
             self.update_sql_db()
+        if self.ejercicio == '':
+            self.ejercicio = None
         self.import_dfs()
 
     # --------------------------------------------------
@@ -81,8 +83,8 @@ class ControlRecursos(ImportDataFrame):
     # --------------------------------------------------
     def import_siif_rci02(self):
         df = super().import_siif_rci02(self.ejercicio)
-        df = df.loc[df['es_invico'] == False]
-        df = df.loc[df['es_remanente'] == False]
+        # df = df.loc[df['es_invico'] == False]
+        # df = df.loc[df['es_remanente'] == False]
         df = df.loc[df['es_verificado'] == True]
         keep = ['MACRO']
         df['cta_cte'].loc[df.glosa.str.contains('|'.join(keep))] = 'Macro'
@@ -96,6 +98,8 @@ class ControlRecursos(ImportDataFrame):
     # --------------------------------------------------
     def control_mes_grupo(self):
         siif_mes_gpo = self.import_siif_rci02()
+        siif_mes_gpo = siif_mes_gpo.loc[siif_mes_gpo['es_invico'] == False]
+        siif_mes_gpo = siif_mes_gpo.loc[siif_mes_gpo['es_remanente'] == False]
         siif_mes_gpo = siif_mes_gpo >> \
             dplyr.select(f.mes, f.grupo, f.importe) >> \
             dplyr.group_by(f.mes, f.grupo) >> \
@@ -128,6 +132,8 @@ class ControlRecursos(ImportDataFrame):
     # --------------------------------------------------
     def control_mes_grupo_cta_cte(self):
         siif_mes_gpo_cta_cte = self.import_siif_rci02()
+        siif_mes_gpo_cta_cte = siif_mes_gpo_cta_cte.loc[siif_mes_gpo_cta_cte['es_invico'] == False]
+        siif_mes_gpo_cta_cte = siif_mes_gpo_cta_cte.loc[siif_mes_gpo_cta_cte['es_remanente'] == False]
         siif_mes_gpo_cta_cte = siif_mes_gpo_cta_cte >> \
             dplyr.select(f.mes, f.grupo, f.cta_cte, f.importe) >> \
             dplyr.group_by(f.mes, f.grupo, f.cta_cte) >> \
@@ -156,6 +162,22 @@ class ControlRecursos(ImportDataFrame):
         control_mes_gpo_cta_cte = pd.DataFrame(control_mes_gpo_cta_cte)
         control_mes_gpo_cta_cte.reset_index(drop=True, inplace=True)
         return control_mes_gpo_cta_cte
+
+    # --------------------------------------------------
+    def control_recursos(self):
+        group_by = ['ejercicio', 'mes', 'cta_cte', 'grupo']
+        siif = self.import_siif_rci02()
+        siif = siif.loc[siif['es_invico'] == False]
+        siif = siif.loc[siif['es_remanente'] == False]
+        siif = siif.groupby(group_by)['importe'].sum()
+        siif = siif.reset_index(drop=False)
+        siif = siif.rename(columns={'importe':'recursos_siif'})
+        sscc = self.import_banco_invico()
+        sscc = sscc.groupby(group_by)['importe'].sum()
+        sscc = sscc.reset_index(drop=False)
+        sscc = sscc.rename(columns={'importe':'depositos_banco'})
+        control = pd.merge(siif, sscc, how='outer')       
+        return control
 
     # # --------------------------------------------------
     # def control_completo(self):
