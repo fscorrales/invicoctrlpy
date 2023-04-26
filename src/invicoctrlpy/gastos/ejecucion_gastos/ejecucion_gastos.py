@@ -23,7 +23,7 @@ from invicodb.update import update_db
 
 @dataclass
 # --------------------------------------------------
-class EjecucionCompleta(ImportDataFrame):
+class EjecucionGastos(ImportDataFrame):
     ejercicio:str = str(dt.datetime.now().year)
     input_path:str = None
     db_path:str = None
@@ -58,7 +58,7 @@ class EjecucionCompleta(ImportDataFrame):
         self.siif_desc_pres = self.import_siif_desc_pres(ejercicio_to=self.ejercicio)
 
     # --------------------------------------------------
-    def import_siif_obras_desc(self):
+    def import_siif_gtos_desc(self):
         df = super().import_siif_rf602(self.ejercicio)
         #df = df.loc[df['ordenado'] > 0]
         df.sort_values(by=['ejercicio', 'estructura'], ascending=[False, True],inplace=True)
@@ -78,3 +78,7 @@ class EjecucionCompleta(ImportDataFrame):
         df = pd.DataFrame(df)
         df.reset_index(drop=True, inplace=True)
         return df
+
+    # --------------------------------------------------
+    def import_siif_comprobantes(self) -> pd.DataFrame:
+        return super().import_siif_comprobantes(self.ejercicio)
