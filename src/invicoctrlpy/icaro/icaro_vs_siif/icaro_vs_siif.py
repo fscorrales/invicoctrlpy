@@ -18,10 +18,11 @@ import datetime as dt
 import os
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
-from datar import base, dplyr, f, tidyr
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 from invicodb.update import update_db
+
 
 # --------------------------------------------------
 @dataclass
@@ -68,6 +69,7 @@ class IcaroVsSIIF(ImportDataFrame):
     # --------------------------------------------------
     def import_dfs(self):
         self.import_ctas_ctes()
+        self.siif_desc_pres = self.import_siif_desc_pres(ejercicio_to=self.ejercicio)
         self.import_icaro_carga(self.ejercicio)
         self.import_siif_rfondo07tp_pa6(self.ejercicio)
         self.import_siif_rf602()
@@ -89,214 +91,203 @@ class IcaroVsSIIF(ImportDataFrame):
 
     # --------------------------------------------------
     def control_ejecucion_anual(self):
-        icaro_por_estructura = self.icaro_carga.copy()
-        icaro_por_estructura = icaro_por_estructura >> \
-            dplyr.filter_(f.tipo != 'PA6') >> \
-            dplyr.mutate(estructura = f.actividad + '-' + f.partida) >> \
-            dplyr.group_by(f.estructura, f.fuente) >> \
-            dplyr.summarise(ejecucion_icaro = base.sum_(f.importe),
-                            _groups = 'drop')
-        siif_por_estructura = self.siif_rf602.copy()
-        siif_por_estructura = siif_por_estructura >> \
-            dplyr.select(f.estructura, f.fuente,
-            ejecucion_siif = f.ordenado)
-        ejecucion_anual = siif_por_estructura >> \
-            dplyr.full_join(icaro_por_estructura) >> \
-            tidyr.replace_na(0) >> \
-            dplyr.mutate(
-                diferencia = f.ejecucion_siif - f.ejecucion_icaro
-            ) >> \
-            dplyr.filter_(~dplyr.near(f.diferencia, 0))
-        ejecucion_anual.sort_values(by=['estructura', 'fuente'], inplace= True)
-        ejecucion_anual = pd.DataFrame(ejecucion_anual)
-        ejecucion_anual.reset_index(drop=True, inplace=True)
-        return ejecucion_anual
+        group_by = ['ejercicio','estructura', 'fuente']
+        icaro = self.icaro_carga.copy()
+        icaro = icaro.loc[icaro['tipo'] != 'PA6']
+        icaro['estructura'] = icaro.actividad + '-' + icaro.partida
+        icaro = icaro.groupby(group_by)['importe'].sum()
+        icaro = icaro.reset_index(drop=False)
+        icaro = icaro.rename(columns={'importe':'ejecucion_icaro'})
+        siif = self.siif_rf602.copy()
+        siif = siif.loc[:, group_by + ['ordenado']]
+        siif = siif.rename(columns={'ordenado':'ejecucion_siif'})
+        df = pd.merge(icaro, siif, how='outer', on = group_by, copy=False)
+        df['diferencia'] = df['ejecucion_siif'] - df['ejecucion_icaro']
+        df = df.fillna(0)
+        df = df.loc[~np.isclose(df['diferencia'], 0)]
+        df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
+        return df
 
     # --------------------------------------------------
     def control_comprobantes(self):
+        select = [
+            'ejercicio', 'nro_comprobante', 'fuente', 'importe',
+            'mes', 'cta_cte', 'cuit', 'partida'
+        ]
         siif = self.siif_comprobantes.copy()
         # En ICARO limito los REG para regularizaciones de PA6
         siif.loc[(siif.clase_reg == 'REG') & (siif.nro_fondo.isnull()), 'clase_reg'] = 'CYO'
-        siif = siif >> \
-            dplyr.select(
-                siif_nro = f.nro_comprobante,
-                siif_tipo = f.clase_reg,
-                siif_fuente = f.fuente,
-                siif_importe = f.importe,
-                siif_mes = f.mes,
-                siif_cta_cte = f.cta_cte,
-                siif_cuit = f.cuit,
-                siif_partida = f.partida
-            )
+        siif = siif.loc[:, select + ['clase_reg']]
+        siif = siif.rename(columns={
+                'nro_comprobante':'siif_nro',
+                'clase_reg':'siif_tipo',
+                'fuente':'siif_fuente',
+                'importe':'siif_importe',
+                'mes':'siif_mes',
+                'cta_cte':'siif_cta_cte',
+                'cuit':'siif_cuit',
+                'partida':'siif_partida'
+        })
         icaro = self.icaro_carga.copy()
-        icaro = icaro >> \
-            dplyr.filter_(f.tipo != 'PA6') >> \
-            dplyr.select(
-                icaro_nro = f.nro_comprobante,
-                icaro_tipo = f.tipo,
-                icaro_fuente = f.fuente,
-                icaro_importe = f.importe,
-                icaro_mes = f.mes,
-                icaro_cta_cte = f.cta_cte,
-                icaro_cuit = f.cuit,
-                icaro_partida = f.partida
-            )
-        comprobantes = siif >> \
-            dplyr.full_join(icaro, by={'siif_nro':'icaro_nro'}, keep=True) >> \
-            tidyr.replace_na(0) >> \
-            dplyr.mutate(
-                err_nro = f.siif_nro != f.icaro_nro,
-                err_tipo = f.siif_tipo != f.icaro_tipo,
-                err_mes = f.siif_mes != f.icaro_mes,
-                err_partida = f.siif_partida != f.icaro_partida,
-                err_fuente = f.siif_fuente != f.icaro_fuente,
-                err_importe = ~dplyr.near(f.siif_importe - f.icaro_importe, 0),
-                err_cta_cte = f.siif_cta_cte != f.icaro_cta_cte,
-                err_cuit = f.siif_cuit != f.icaro_cuit
-            ) >>\
-            dplyr.select(
-                f.siif_nro, f.icaro_nro, f.err_nro,
-                f.siif_tipo, f.icaro_tipo, f.err_tipo,
-                f.siif_fuente, f.icaro_fuente, f.err_fuente,
-                f.siif_importe, f.icaro_importe, f.err_importe,
-                f.siif_mes, f.icaro_mes, f.err_mes,
-                f.siif_cta_cte, f.icaro_cta_cte, f.err_cta_cte,
-                f.siif_cuit, f.icaro_cuit, f.err_cuit,
-                f.siif_partida, f.icaro_partida, f.err_partida
-            ) >> \
-            dplyr.filter_(
-                f.err_nro | f.err_mes | f.err_partida |
-                f.err_fuente | f.err_importe | f.err_cta_cte |
-                f.err_cuit| f.err_tipo ) >> \
-            dplyr.mutate(
-                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-            )
-            # dplyr.mutate(
-            #     err_nro = dplyr.if_else(f.err_nro > 0, "\u2713", "\u2718")
-            # )
+        icaro = icaro.loc[:, select + ['tipo']]
+        icaro = icaro.loc[icaro['tipo'] != 'PA6']
+        icaro = icaro.rename(columns={
+                'nro_comprobante':'icaro_nro',
+                'tipo':'icaro_tipo',
+                'fuente':'icaro_fuente',
+                'importe':'icaro_importe',
+                'mes':'icaro_mes',
+                'cta_cte':'icaro_cta_cte',
+                'cuit':'icaro_cuit',
+                'partida':'icaro_partida'
+        })
+        df = pd.merge(
+            siif, icaro, how='outer', 
+            left_on = ['ejercicio', 'siif_nro'], 
+            right_on = ['ejercicio', 'icaro_nro']
+        )
+        df['err_nro'] = df.siif_nro != df.icaro_nro
+        df['err_tipo'] = df.siif_tipo != df.icaro_tipo
+        df['err_mes'] = df.siif_mes != df.icaro_mes
+        df['err_partida'] = df.siif_partida != df.icaro_partida
+        df['err_fuente'] = df.siif_fuente != df.icaro_fuente
+        df['err_importe'] = ~np.isclose((df.siif_importe - df.icaro_importe), 0)
+        df['err_cta_cte'] = df.siif_cta_cte != df.icaro_cta_cte
+        df['err_cuit'] = df.siif_cuit != df.icaro_cuit
+        df = df.loc[(
+            df.err_nro + df.err_tipo + df.err_mes + df.err_partida + 
+            df.err_fuente + df.err_importe + df.err_cta_cte + df.err_cuit
+        ) > 0]
+        df = df.loc[:, ['ejercicio',
+            'siif_nro', 'icaro_nro', 'err_nro',
+            'siif_tipo', 'icaro_tipo', 'err_tipo',
+            'siif_fuente', 'icaro_fuente', 'err_fuente',
+            'siif_importe', 'icaro_importe', 'err_importe',
+            'siif_mes', 'icaro_mes', 'err_mes',
+            'siif_cta_cte', 'icaro_cta_cte', 'err_cta_cte',
+            'siif_cuit', 'icaro_cuit', 'err_cuit',
+            'siif_partida', 'icaro_partida', 'err_partida']
+        ]
+        # comprobantes.sort_values(
+        #     by=['err_nro', 'err_fuente', 'err_importe', 
+        #     'err_cta_cte', 'err_cuit', 'err_partida', 
+        #     'err_mes'], ascending=False,
+        #     inplace=True)
 
-        comprobantes = pd.DataFrame(comprobantes)
-        comprobantes.sort_values(
-            by=['err_nro', 'err_fuente', 'err_importe', 
-            'err_cta_cte', 'err_cuit', 'err_partida', 
-            'err_mes'], ascending=False,
-            inplace=True)
-        comprobantes.reset_index(drop=True, inplace=True)
-        return comprobantes
+        return df
 
     # --------------------------------------------------
     def control_pa6(self):
         siif_fdos = self.siif_rfondo07tp.copy()
-        siif_fdos = siif_fdos >> \
-            dplyr.select(
-                siif_nro_fondo = f.nro_fondo,
-                siif_mes_pa6 = f.mes,
-                siif_importe_pa6 = f.ingresos,
-                siif_saldo_pa6 = f.saldo
-            )
+        siif_fdos = siif_fdos.loc[
+            :, ['ejercicio', 'nro_fondo', 'mes', 'ingresos', 'saldo']
+        ]
+        siif_fdos['nro_fondo'] = siif_fdos['nro_fondo'].str.zfill(5) + '/' + siif_fdos.ejercicio.str[-2:]
+        siif_fdos = siif_fdos.rename(columns={
+            'nro_fondo':'siif_nro_fondo', 
+            'mes':'siif_mes_pa6', 
+            'ingresos':'siif_importe_pa6', 
+            'saldo':'siif_saldo_pa6'
+        })
         
+        select = [
+            'ejercicio','nro_comprobante', 'fuente', 'importe',
+            'mes', 'cta_cte', 'cuit'
+        ]
+
         siif_gtos = self.siif_comprobantes.copy()
         siif_gtos = siif_gtos.loc[siif_gtos['clase_reg'] == 'REG']
-        siif_gtos = siif_gtos >> \
-            dplyr.select(
-                siif_nro_fondo = f.nro_fondo,
-                siif_cta_cte = f.cta_cte, 
-                siif_cuit = f.cuit,
-                siif_tipo = f.clase_reg, 
-                siif_fuente =f.fuente, 
-                siif_nro_reg = f.nro_comprobante, 
-                siif_importe_reg = f.importe, 
-                siif_mes_reg = f.mes
-            )
+        siif_gtos = siif_gtos.loc[:, select + ['nro_fondo', 'clase_reg']]
+        siif_gtos['nro_fondo'] = siif_gtos['nro_fondo'].str.zfill(5) + '/' + siif_gtos.ejercicio.str[-2:]
+        siif_gtos = siif_gtos.rename(columns={
+                'nro_fondo':'siif_nro_fondo',
+                'cta_cte':'siif_cta_cte', 
+                'cuit':'siif_cuit',
+                'clase_reg':'siif_tipo', 
+                'fuente':'siif_fuente', 
+                'nro_comprobante':'siif_nro_reg', 
+                'importe':'siif_importe_reg', 
+                'mes':'siif_mes_reg',
+        })
         
-        icaro = self.icaro_carga
-        icaro = icaro >> \
-            dplyr.select(
-                icaro_mes = f.mes,
-                icaro_nro = f.nro_comprobante, 
-                icaro_tipo = f.tipo, 
-                icaro_importe = f.importe,
-                icaro_cuit = f.cuit,
-                icaro_cta_cte = f.cta_cte,
-                icaro_fuente = f.fuente
-            )
+        icaro = self.icaro_carga.copy()
+        icaro = icaro.loc[:, select + ['tipo']]
+        icaro = icaro.rename(columns={
+                'mes':'icaro_mes',
+                'nro_comprobante':'icaro_nro', 
+                'tipo':'icaro_tipo', 
+                'importe':'icaro_importe',
+                'cuit':'icaro_cuit',
+                'cta_cte':'icaro_cta_cte',
+                'fuente':'icaro_fuente'
+        })
         
-        icaro_pa6 =  icaro >> \
-            dplyr.filter_(f.icaro_tipo == 'PA6') >> \
-            dplyr.select(
-                icaro_nro_fondo = f.icaro_nro,
-                icaro_mes_pa6 = f.icaro_mes,
-                icaro_importe_pa6 = f.icaro_importe
-            )
+        icaro_pa6 = icaro.loc[icaro['icaro_tipo'] == 'PA6']
+        icaro_pa6 = icaro_pa6.loc[:, ['icaro_mes', 'icaro_nro', 'icaro_importe']]
+        icaro_pa6 = icaro_pa6.rename(columns={
+                'icaro_mes':'icaro_mes_pa6',
+                'icaro_nro':'icaro_nro_fondo', 
+                'icaro_importe':'icaro_importe_pa6',
+        })
 
-        icaro_reg =  icaro >> \
-            dplyr.filter_(f.icaro_tipo != 'PA6') >> \
-            dplyr.select(
-                f.icaro_cta_cte, 
-                f.icaro_cuit, 
-                f.icaro_fuente,
-                f.icaro_tipo, 
-                icaro_nro_reg = f.icaro_nro,
-                icaro_mes_reg = f.icaro_mes,
-                icaro_importe_reg = f.icaro_importe,
-            )
-        
-        control_pa6 = siif_fdos >> \
-            dplyr.left_join(siif_gtos, by='siif_nro_fondo', keep=False) >>\
-            dplyr.mutate(
-                siif_nro_fondo = f.siif_nro_fondo.str.zfill(5) + '/' + self.ejercicio[-2:]
-            ) >> \
-            dplyr.full_join(
-                icaro_pa6, by={'siif_nro_fondo':'icaro_nro_fondo'}, 
-                keep=True
-            ) >> \
-            dplyr.left_join(
-                icaro_reg, by={'siif_nro_reg':'icaro_nro_reg'}, 
-                keep=True
-            )  >> \
-            tidyr.replace_na(0) >> \
-            dplyr.mutate(
-                err_nro_fondo = f.siif_nro_fondo != f.icaro_nro_fondo,
-                err_mes_pa6 = f.siif_mes_pa6 != f.icaro_mes_pa6,
-                err_importe_pa6 = ~dplyr.near(f.siif_importe_pa6 - f.icaro_importe_pa6, 0),
-                err_nro_reg = f.siif_nro_reg != f.icaro_nro_reg,
-                err_mes_reg = f.siif_mes_reg != f.icaro_mes_reg,
-                err_importe_reg = ~dplyr.near(f.siif_importe_reg - f.icaro_importe_reg, 0),
-                err_tipo = f.siif_tipo != f.icaro_tipo,
-                err_fuente = f.siif_fuente != f.icaro_fuente,
-                err_cta_cte = f.siif_cta_cte != f.icaro_cta_cte,
-                err_cuit = f.siif_cuit != f.icaro_cuit
-            ) >>\
-            dplyr.select(
-                f.siif_nro_fondo, f.icaro_nro_fondo, f.err_nro_fondo,
-                f.siif_mes_pa6, f.icaro_mes_pa6, f.err_mes_pa6,
-                f.siif_importe_pa6, f.icaro_importe_pa6, f.err_importe_pa6,
-                f.siif_nro_reg, f.icaro_nro_reg, f.err_nro_reg,
-                f.siif_mes_reg, f.icaro_mes_reg, f.err_mes_reg,
-                f.siif_importe_reg, f.icaro_importe_reg, f.err_importe_reg,
-                f.siif_tipo, f.icaro_tipo, f.err_tipo,
-                f.siif_fuente, f.icaro_fuente, f.err_fuente,
-                f.siif_cta_cte, f.icaro_cta_cte, f.err_cta_cte,
-                f.siif_cuit, f.icaro_cuit, f.err_cuit
-            ) >> \
-            dplyr.filter_(
-                f.err_nro_fondo | f.err_mes_pa6 | f.err_importe_pa6 |
-                f.err_nro_reg | f.err_mes_reg | f.err_importe_reg |
-                f.err_fuente | f.err_tipo | f.err_cta_cte |
-                f.err_cuit) >> \
-            dplyr.mutate(
-                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-            )
+        icaro_reg = icaro.loc[icaro['icaro_tipo'] != 'PA6']
+        icaro_reg = icaro_reg.rename(columns={
+                'icaro_mes':'icaro_mes_reg',
+                'icaro_nro':'icaro_nro_reg', 
+                'icaro_importe':'icaro_importe_reg',
+        })
 
-        control_pa6 = pd.DataFrame(control_pa6)
-        control_pa6.sort_values(
+        df = pd.merge(
+            siif_fdos, siif_gtos, how='left', 
+            on=['ejercicio','siif_nro_fondo'], copy=False
+        )
+        df = pd.merge(
+            df, icaro_pa6, how='outer', 
+            left_on = 'siif_nro_fondo', 
+            right_on = 'icaro_nro_fondo'
+        )
+        df = pd.merge(
+            df, icaro_reg, how='left', 
+            left_on = ['ejercicio', 'siif_nro_reg'], 
+            right_on = ['ejercicio', 'icaro_nro_reg']
+        )
+        df = df.fillna(0)
+        df['err_nro_fondo'] = df.siif_nro_fondo != df.icaro_nro_fondo
+        df['err_mes_pa6'] = df.siif_mes_pa6 != df.icaro_mes_pa6
+        df['err_importe_pa6'] = ~np.isclose((df.siif_importe_pa6 - df.icaro_importe_pa6), 0)
+        df['err_nro_reg'] = df.siif_nro_reg != df.icaro_nro_reg
+        df['err_mes_reg'] = df.siif_mes_reg != df.icaro_mes_reg
+        df['err_importe_reg'] = ~np.isclose((df.siif_importe_reg - df.icaro_importe_reg), 0)
+        df['err_tipo'] = df.siif_tipo != df.icaro_tipo
+        df['err_fuente'] = df.siif_fuente != df.icaro_fuente
+        df['err_cta_cte'] = df.siif_cta_cte != df.icaro_cta_cte
+        df['err_cuit'] = df.siif_cuit != df.icaro_cuit
+        df = df.loc[:, ['ejercicio',
+            'siif_nro_fondo', 'icaro_nro_fondo', 'err_nro_fondo',
+            'siif_mes_pa6', 'icaro_mes_pa6', 'err_mes_pa6',
+            'siif_importe_pa6', 'icaro_importe_pa6', 'err_importe_pa6',
+            'siif_nro_reg', 'icaro_nro_reg', 'err_nro_reg',
+            'siif_mes_reg', 'icaro_mes_reg', 'err_mes_reg',
+            'siif_importe_reg', 'icaro_importe_reg', 'err_importe_reg',
+            'siif_tipo', 'icaro_tipo', 'err_tipo',
+            'siif_fuente', 'icaro_fuente', 'err_fuente',
+            'siif_cta_cte', 'icaro_cta_cte', 'err_cta_cte',
+            'siif_cuit', 'icaro_cuit', 'err_cuit'
+        ]]
+        df = df.loc[(
+            df.err_nro_fondo + df.err_mes_pa6 + df.err_importe_pa6 + 
+            df.err_nro_reg + df.err_mes_reg + df.err_importe_reg + 
+            df.err_fuente + df.err_tipo + df.err_cta_cte +
+            df.err_cuit
+        ) > 0]
+        df = df.sort_values(
             by=['err_nro_fondo','err_importe_pa6', 
             'err_nro_reg', 'err_importe_reg', 
             'err_fuente', 'err_cta_cte', 'err_cuit', 
             'err_tipo', 'err_mes_pa6', 'err_mes_reg'], 
-            ascending=False, inplace=True)
-        control_pa6.reset_index(drop=True, inplace=True)
-        return control_pa6
+            ascending=False
+        )
+        return df
 
 # --------------------------------------------------
 def get_args():

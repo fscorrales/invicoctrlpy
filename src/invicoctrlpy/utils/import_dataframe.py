@@ -87,7 +87,12 @@ class ImportDataFrame(HanglingPath):
                         neto_reg:bool = False) -> pd.DataFrame:
         df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'carga')  
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
+        # if ejercicio != None:
+        #     df = df.loc[df['ejercicio'] == ejercicio]
         # df = df.loc[df['tipo'] != 'REG']
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'icaro_cta_cte']]
@@ -282,8 +287,13 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_rfondo07tp_pa6(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenFdosRfondo07tp().from_sql(self.db_path + '/siif.sqlite')
+        # if ejercicio != None:
+        #     df = df.loc[df['ejercicio'] == ejercicio]
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         df = df.loc[df['tipo_comprobante'] == 'ADELANTOS A CONTRATISTAS Y PROVEEDORES']
         self.siif_rfondo07tp = df
         return self.siif_rfondo07tp
