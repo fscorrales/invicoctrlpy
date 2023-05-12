@@ -116,21 +116,32 @@ class ImportDataFrame(HanglingPath):
         # icaro = icaro >> \
         #     dplyr.filter_(f.tipo != 'PA6')
         rdeu = self.import_siif_rdeu012()
-        rdeu = rdeu >> \
-            dplyr.select(f.nro_comprobante, f.saldo, f.mes) >> \
-            dplyr.distinct(f.nro_comprobante, f.mes, _keep_all=True) >> \
-            dplyr.inner_join(icaro) >> \
-            dplyr.mutate(
-                importe = f.saldo * (-1),
-                tipo = 'RDEU'
-            )  >> \
-            dplyr.select(~f.saldo) >> \
-            dplyr.bind_rows(icaro)
+        rdeu = rdeu.loc[:, ['nro_comprobante', 'saldo', 'mes']]
+        rdeu = rdeu.drop_duplicates(subset=['nro_comprobante', 'mes'])
+        rdeu = pd.merge(
+            rdeu, icaro, how='inner', copy=False
+        )
+        rdeu['importe'] = rdeu.saldo * (-1)
+        rdeu['tipo'] = 'RDEU'
+        rdeu = rdeu.drop(columns=['saldo'])
+        rdeu = pd.concat([rdeu, icaro], copy=False)
+        # rdeu = rdeu >> \
+        #     dplyr.select(f.nro_comprobante, f.saldo, f.mes) >> \
+        #     dplyr.distinct(f.nro_comprobante, f.mes, _keep_all=True) >> \
+        #     dplyr.inner_join(icaro) >> \
+        #     dplyr.mutate(
+        #         importe = f.saldo * (-1),
+        #         tipo = 'RDEU'
+        #     )  >> \
+        #     dplyr.select(~f.saldo) >> \
+        #     dplyr.bind_rows(icaro)
         icaro = self.import_icaro_carga()
         icaro = icaro.loc[icaro['tipo'].isin(['PA6'])]
-        rdeu = rdeu >> \
-            dplyr.bind_rows(icaro)
-        self.icaro_carga_neto_rdeu = pd.DataFrame(rdeu)
+        rdeu = pd.concat([rdeu, icaro], copy=False)
+        icaro_carga_neto_rdeu = rdeu
+        # rdeu = rdeu >> \
+        #     dplyr.bind_rows(icaro)
+        # self.icaro_carga_neto_rdeu = pd.DataFrame(rdeu)
 
         # Ajustamos la Deuda Flotante Pagada
         rdeu = self.import_siif_rdeu012()
@@ -142,35 +153,69 @@ class ImportDataFrame(HanglingPath):
 
         # Incorporamos los comprobantes de gastos pagados 
         # en periodos posteriores (Deuda Flotante)
-        rdeu = rdeu >> \
-            dplyr.filter_(f.ejercicio == ejercicio) >> \
-            dplyr.left_join(
-                dplyr.select(self.import_icaro_carga(neto_pa6=True, neto_reg=True),
-                    f.nro_comprobante, f.actividad, f.partida, 
-                    f.fondo_reparo, f.certificado, f.avance, 
-                    f.origen, f.obra
-                ),            
-                by='nro_comprobante'
-            ) >> \
-            dplyr.mutate(
-                importe = f.saldo,
-                tipo = 'RDEU',
-                id = f.nro_comprobante + 'C'
-            ) >> \
-            dplyr.filter_(~base.is_na(f.actividad)) >> \
-            dplyr.select(
-                f.ejercicio, f.nro_comprobante, f.fuente,
-                f.cuit, f.cta_cte, f.tipo, f.importe, f.id,
-                f.actividad, f.partida, f.fondo_reparo, 
-                f.certificado, f.avance, f.origen, f.obra,
-                fecha = f.fecha_hasta,
-                mes = f.mes_hasta
-            ) >> \
-            dplyr.bind_rows(self.icaro_carga_neto_rdeu) 
-        df = pd.DataFrame(rdeu)
-        df = df.loc[df['ejercicio'] == ejercicio]
-        self.icaro_carga_neto_rdeu = df
-        return self.icaro_carga_neto_rdeu
+        if ejercicio != None:
+            if isinstance(ejercicio, list):
+                rdeu = rdeu.loc[rdeu['ejercicio'].isin(ejercicio)]
+            else:
+                rdeu = rdeu.loc[rdeu['ejercicio'].isin([ejercicio])]
+        icaro = self.import_icaro_carga(neto_pa6=True, neto_reg=True)
+        icaro = icaro.loc[:, [
+            'nro_comprobante', 'actividad', 'partida', 
+            'fondo_reparo', 'certificado', 'avance', 
+            'origen', 'obra'
+        ]]
+        rdeu = pd.merge(rdeu, icaro, on='nro_comprobante', copy=False)
+        rdeu['importe'] = rdeu.saldo
+        rdeu['tipo'] = 'RDEU'
+        rdeu['id'] =  rdeu['nro_comprobante'] + 'C'
+        rdeu = rdeu.loc[~rdeu['actividad'].isna()]
+        rdeu = rdeu.drop(columns=['fecha', 'mes'])
+        rdeu = rdeu.rename(columns={
+            'fecha_hasta':'fecha',
+            'mes_hasta':'mes'
+        })
+        rdeu = rdeu.loc[:, [
+            'ejercicio', 'nro_comprobante', 'fuente',
+            'cuit', 'cta_cte', 'tipo', 'importe', 'id',
+            'actividad', 'partida', 'fondo_reparo', 
+            'certificado', 'avance', 'origen', 'obra',
+            'fecha', 'mes'
+        ]]
+        df = pd.concat([rdeu, icaro_carga_neto_rdeu], copy=False)
+
+        # rdeu = rdeu >> \
+        #     dplyr.filter_(f.ejercicio == ejercicio) >> \
+        #     dplyr.left_join(
+        #         dplyr.select(self.import_icaro_carga(neto_pa6=True, neto_reg=True),
+        #             f.nro_comprobante, f.actividad, f.partida, 
+        #             f.fondo_reparo, f.certificado, f.avance, 
+        #             f.origen, f.obra
+        #         ),            
+        #         by='nro_comprobante'
+        #     ) >> \
+        #     dplyr.mutate(
+        #         importe = f.saldo,
+        #         tipo = 'RDEU',
+        #         id = f.nro_comprobante + 'C'
+        #     ) >> \
+        #     dplyr.filter_(~base.is_na(f.actividad)) >> \
+        #     dplyr.select(
+        #         f.ejercicio, f.nro_comprobante, f.fuente,
+        #         f.cuit, f.cta_cte, f.tipo, f.importe, f.id,
+        #         f.actividad, f.partida, f.fondo_reparo, 
+        #         f.certificado, f.avance, f.origen, f.obra,
+        #         fecha = f.fecha_hasta,
+        #         mes = f.mes_hasta
+        #     ) >> \
+        #     dplyr.bind_rows(icaro_carga_neto_rdeu) 
+        # df = pd.DataFrame(rdeu)
+        if ejercicio != None:
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
+        # self.icaro_carga_neto_rdeu = df
+        return df
 
     # --------------------------------------------------
     def import_icaro_retenciones(self) -> pd.DataFrame:
@@ -195,7 +240,10 @@ class ImportDataFrame(HanglingPath):
     def import_siif_rdeu012(self, ejercicio:str = None) -> pd.DataFrame:
         df = DeudaFlotanteRdeu012().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'siif_contabilidad_cta_cte']]
         df = pd.merge(
@@ -540,7 +588,10 @@ class ImportDataFrame(HanglingPath):
         self, ejercicio:str = None, neto_cert_neg:bool=False) -> pd.DataFrame:
         df = JoinResumenRendProvCuit().from_sql(self.db_path + '/sgf.sqlite')  
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'sgf_cta_cte']]
         df = pd.merge(

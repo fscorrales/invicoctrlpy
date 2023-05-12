@@ -73,8 +73,8 @@ class ControlObras(ImportDataFrame):
     # --------------------------------------------------
     def import_dfs(self):
         self.import_ctas_ctes()
-        self.import_icaro_carga_neto_rdeu(self.ejercicio)
-        self.import_siif_rdeu012()
+        # self.import_icaro_carga_neto_rdeu(self.ejercicio)
+        # self.import_siif_rdeu012()
         self.import_icaro_carga(self.ejercicio)
         self.import_resumen_rend_cuit()
 
@@ -94,80 +94,99 @@ class ControlObras(ImportDataFrame):
         return self.sgf_resumen_rend_cuit
 
     # --------------------------------------------------
-    def control_mes_cta_cte(self):
-        icaro_mes_cta_cte = self.icaro_carga_neto_rdeu.copy()
-        icaro_mes_cta_cte = icaro_mes_cta_cte >> \
-            dplyr.select(f.mes, f.cta_cte, f.importe) >> \
-            dplyr.group_by(f.mes, f.cta_cte) >> \
-            dplyr.summarise(ejecutado_icaro = base.sum_(f.importe),
-                            _groups = 'drop')
-        sgf_mes_cta_cte = self.sgf_resumen_rend_cuit.copy()
-        sgf_mes_cta_cte = sgf_mes_cta_cte >> \
-            dplyr.select(
-                f.mes, f.cta_cte, 
-                f.importe_bruto
-            ) >> \
-            dplyr.group_by(f.mes, f.cta_cte) >> \
-            dplyr.summarise(
-                bruto_sgf = base.sum_(f.importe_bruto),
-                _groups = 'drop')
-        control_mes_cta_cte = icaro_mes_cta_cte >> \
-            dplyr.full_join(sgf_mes_cta_cte) >> \
-            dplyr.mutate(
-                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-            ) >> \
-            dplyr.mutate(
-                diferencia = f.ejecutado_icaro - f.bruto_sgf
-            )
+    def control_cruzado(
+        self, groupby_cols:list = ['ejercicio', 'mes', 'cta_cte']
+    ) -> pd.DataFrame:
+        icaro = self.import_icaro_carga_neto_rdeu(self.ejercicio).copy()
+        icaro = icaro.loc[:, groupby_cols + ['importe']]
+        icaro = icaro.groupby(groupby_cols)['importe'].sum()
+        icaro = icaro.reset_index()
+        icaro = icaro.rename(columns={'importe':'ejecutado_icaro'})
+        # icaro = icaro >> \
+        #     dplyr.select(f.mes, f.cta_cte, f.importe) >> \
+        #     dplyr.group_by(f.mes, f.cta_cte) >> \
+        #     dplyr.summarise(ejecutado_icaro = base.sum_(f.importe),
+        #                     _groups = 'drop')
+        sgf = self.sgf_resumen_rend_cuit.copy()
+        sgf = sgf.loc[:, groupby_cols + ['importe_bruto']]
+        sgf = sgf.groupby(groupby_cols)['importe_bruto'].sum()
+        sgf = sgf.reset_index()
+        sgf = sgf.rename(columns={'importe_bruto':'bruto_sgf'})
+        # sgf = sgf >> \
+        #     dplyr.select(
+        #         f.mes, f.cta_cte, 
+        #         f.importe_bruto
+        #     ) >> \
+        #     dplyr.group_by(f.mes, f.cta_cte) >> \
+        #     dplyr.summarise(
+        #         bruto_sgf = base.sum_(f.importe_bruto),
+        #         _groups = 'drop')
+        df = pd.merge(icaro, sgf, how='outer', on=groupby_cols, copy=False)
+        df[['ejecutado_icaro', 'bruto_sgf']] = df[['ejecutado_icaro', 'bruto_sgf']].fillna(0)
+        df['diferencia'] = df.ejecutado_icaro - df.bruto_sgf
+        # df = icaro >> \
+        #     dplyr.full_join(sgf) >> \
+        #     dplyr.mutate(
+        #         dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+        #     ) >> \
+        #     dplyr.mutate(
+        #         diferencia = f.ejecutado_icaro - f.bruto_sgf
+        #     )
         #     dplyr.filter_(~dplyr.near(f.diferencia, 0))
-        control_mes_cta_cte.sort_values(by=['mes', 'cta_cte'], inplace= True)
-        control_mes_cta_cte['dif_acum'] = control_mes_cta_cte['diferencia'].cumsum()
-        control_mes_cta_cte = pd.DataFrame(control_mes_cta_cte)
-        control_mes_cta_cte.reset_index(drop=True, inplace=True)
-        return control_mes_cta_cte
+        # df.sort_values(by=['mes', 'cta_cte'], inplace= True)
+        # df['dif_acum'] = df['diferencia'].cumsum()
+        df = pd.DataFrame(df)
+        df.reset_index(drop=True, inplace=True)
+        return df
 
     # --------------------------------------------------
     def control_completo(self):
-        icaro_completo = self.icaro_carga_neto_rdeu.copy()
-        icaro_completo = icaro_completo >> \
-            dplyr.rename_with(lambda x: 'icaro_' + x) >> \
-            dplyr.rename(
-                ejercicio = f.icaro_ejercicio,
-                mes = f.icaro_mes,
-                fecha = f.icaro_fecha,
-                cta_cte = f.icaro_cta_cte,
-                cuit = f.icaro_cuit,
-            )
-        sgf_completo = self.sgf_resumen_rend_cuit.copy()
-        sgf_completo = sgf_completo >> \
-            dplyr.rename_with(lambda x: 'sgf_' + x) >> \
-            dplyr.rename(
-                ejercicio = f.sgf_ejercicio,
-                mes = f.sgf_mes,
-                fecha = f.sgf_fecha,
-                cta_cte = f.sgf_cta_cte,
-                cuit = f.sgf_cuit,
-            )
-            # dplyr.select(
-            #     f.mes, f.fecha, f.cta_cte, 
-            #     f.beneficiario, 
-            #     libramiento = f.libramiento_sgf,
-            #     neto_sgf = f.importe_neto, 
-            #     retenciones_sgf = f.retenciones,
-            # )
-        control_completo = sgf_completo >> \
-            dplyr.full_join(icaro_completo) >> \
-            dplyr.mutate(
-                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-            ) >> \
-            dplyr.mutate(
-                diferencia = f.icaro_importe - f.sgf_importe_bruto
-            )
-        control_completo.sort_values(
-            by=['mes', 'fecha','cta_cte', 'cuit'], 
-            inplace= True)
-        control_completo = pd.DataFrame(control_completo)
-        control_completo.reset_index(drop=True, inplace=True)
-        return control_completo
+        icaro = self.import_icaro_carga_neto_rdeu(self.ejercicio).copy()
+        icaro = icaro.add_prefix('icaro_')
+        icaro = icaro.rename(columns={
+            'icaro_ejercicio':'ejercicio',
+            'icaro_mes':'mes',
+            'icaro_cta_cte':'cta_cte',
+        })
+        # icaro = icaro >> \
+        #     dplyr.rename_with(lambda x: 'icaro_' + x) >> \
+        #     dplyr.rename(
+        #         ejercicio = f.icaro_ejercicio,
+        #         mes = f.icaro_mes,
+        #         fecha = f.icaro_fecha,
+        #         cta_cte = f.icaro_cta_cte,
+        #         cuit = f.icaro_cuit,
+        #     )
+        sgf = self.sgf_resumen_rend_cuit.copy()
+        sgf = sgf.add_prefix('sgf_')
+        sgf = sgf.rename(columns={
+            'sgf_ejercicio':'ejercicio',
+            'sgf_mes':'mes',
+            'sgf_cta_cte':'cta_cte',
+        })
+        # sgf = sgf >> \
+        #     dplyr.rename_with(lambda x: 'sgf_' + x) >> \
+        #     dplyr.rename(
+        #         ejercicio = f.sgf_ejercicio,
+        #         mes = f.sgf_mes,
+        #         fecha = f.sgf_fecha,
+        #         cta_cte = f.sgf_cta_cte,
+        #         cuit = f.sgf_cuit,
+        #     )
+        groupby = ['ejercicio', 'mes', 'cta_cte']
+        df = pd.merge(icaro, sgf, how='outer', on=groupby, copy=False)
+        df[['icaro_importe', 'sgf_importe_bruto']] = df[['icaro_importe', 'sgf_importe_bruto']].fillna(0)
+        df['diferencia'] = df.icaro_importe - df.sgf_importe_bruto
+        # df = sgf >> \
+        #     dplyr.full_join(icaro) >> \
+        #     dplyr.mutate(
+        #         dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+        #     ) >> \
+        #     dplyr.mutate(
+        #         diferencia = f.icaro_importe - f.sgf_importe_bruto
+        #     )
+        df = df.sort_values(by=groupby)
+        df = df.reset_index(drop=True)
+        return df
 
 # Ajuste Reemplazo de Chq y Cert Neg???

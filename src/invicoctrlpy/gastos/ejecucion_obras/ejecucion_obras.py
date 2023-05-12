@@ -68,7 +68,7 @@ class EjecucionObras(ImportDataFrame):
         df = super().import_siif_rf602(self.ejercicio)
         df = df.loc[df['partida'].isin(['421', '422'])]
         #df = df.loc[df['ordenado'] > 0]
-        df.sort_values(by=['ejercicio', 'estructura'], ascending=[False, True],inplace=True)
+        df = df.sort_values(by=['ejercicio', 'estructura'], ascending=[False, True])
         df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
         df.drop(
             labels=['org', 'pendiente', 'programa', 
