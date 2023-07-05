@@ -1,6 +1,7 @@
 import datetime as dt
 from dataclasses import dataclass, field
 
+import numpy as np
 import pandas as pd
 from datar import base, dplyr, f
 from invicodatpy.icaro.migrate_icaro import MigrateIcaro
@@ -401,47 +402,48 @@ class ImportDataFrame(HanglingPath):
         self, ejercicio:str = None, neto_art:bool = False,
         neto_gcias_310:bool = False
         ) -> pd.DataFrame:
-        self.import_siif_comprobantes(ejercicio=ejercicio)
-        df = self.siif_comprobantes.copy()
+        df = self.import_siif_comprobantes(ejercicio=ejercicio).copy()
         #df = df[df['grupo'] == '100']
         df = df[df['cta_cte'] == '130832-04']
         if neto_art:
             df = df.loc[~df['partida'].isin(['150', '151'])]
         if neto_gcias_310:
-            self.import_siif_rcocc31(
+            gcias_310 = self.import_siif_rcocc31(
                 ejercicio=ejercicio, cta_contable='2122-1-2'
-            )
-            gcias_310 = self.siif_rcocc31.copy()
+            ).copy()
             gcias_310 = gcias_310[gcias_310['tipo_comprobante'] != 'APE']
             gcias_310 = gcias_310[gcias_310['auxiliar_1'].isin(['245', '310'])]
-            gcias_310 = gcias_310 >> \
-                dplyr.transmute(
-                    ejercicio = f.ejercicio,
-                    mes = f.mes,
-                    fecha = f.fecha,
-                    nro_comprobante = f.nro_entrada.str.zfill(5) + '/' + ejercicio[-2:],
-                    importe = f.creditos * (-1),
-                    grupo = '100',
-                    partida = f.auxiliar_1,
-                    nro_entrada = f.nro_entrada,
-                    nro_origen = f.nro_entrada,
-                    nro_expte = '90000000' + ejercicio,
-                    glosa = dplyr.if_else(f.auxiliar_1 == '245',
-                    'RET. GCIAS. 4TA CATEGORÍA', 'HABERES ERRONEOS COD 310'),
-                    beneficiario = 'INSTITUTO DE VIVIENDA DE CORRIENTES',
-                    nro_fondo = None,
-                    fuente = '11',
-                    cta_cte = '130832-04',
-                    cuit = '30632351514',
-                    clase_reg = 'CYO',
-                    clase_mod = 'NOR',
-                    clase_gto = 'REM',
-                    es_comprometido = True,
-                    es_verificado = True,
-                    es_aprobado = True,
-                    es_pagado = True
-                )
-            gcias_310 = pd.DataFrame(gcias_310)
+            gcias_310['nro_comprobante'] = gcias_310['nro_entrada'].str.zfill(5) + '/' + gcias_310['ejercicio'].str[-2:]
+            gcias_310['importe'] = gcias_310['creditos'] * (-1)
+            gcias_310['grupo'] = '100'
+            gcias_310['partida'] = gcias_310['auxiliar_1']
+            gcias_310['nro_origen'] = gcias_310['nro_entrada']
+            gcias_310['nro_expte'] = '90000000' + gcias_310['ejercicio']
+            
+            gcias_310['glosa'] = np.where(gcias_310['auxiliar_1'] == '245', 
+                                'RET. GCIAS. 4TA CATEGORÍA', 'HABERES ERRONEOS COD 310')
+            gcias_310['beneficiario'] = 'INSTITUTO DE VIVIENDA DE CORRIENTES'
+            gcias_310['nro_fondo'] = None
+            gcias_310['fuente'] = '11'
+            gcias_310['cta_cte'] = '130832-04'
+            gcias_310['cuit'] = '30632351514'
+            gcias_310['clase_reg'] = 'CYO'
+            gcias_310['clase_mod'] = 'NOR'
+            gcias_310['clase_gto'] = 'REM'
+            gcias_310['es_comprometido'] = True
+            gcias_310['es_verificado'] = True
+            gcias_310['es_aprobado'] = True
+            gcias_310['es_pagado'] = True
+            gcias_310 = gcias_310.loc[
+                :, [
+                    'ejercicio', 'mes', 'fecha', 'nro_comprobante',
+                    'importe', 'grupo', 'partida', 'nro_entrada', 
+                    'nro_origen', 'nro_expte', 'glosa', 'beneficiario', 
+                    'nro_fondo', 'fuente', 'cta_cte', 'cuit',
+                    'clase_reg', 'clase_mod', 'clase_gto', 'es_comprometido',
+                    'es_verificado', 'es_aprobado', 'es_pagado',
+                ]
+            ]
             df = pd.concat([df, gcias_310])
         self.siif_comprobantes_haberes = pd.DataFrame(df)
         return self.siif_comprobantes_haberes
@@ -451,28 +453,47 @@ class ImportDataFrame(HanglingPath):
         self, ejercicio:str, neto_art:bool = False,
         neto_gcias_310:bool = False) -> pd.DataFrame:
         #Neteamos los comprobantes de gastos no pagados (Deuda Flotante)
-        self.import_siif_comprobantes_haberes(
-            ejercicio=ejercicio, neto_art=neto_art, neto_gcias_310=neto_gcias_310)
-        comprobantes_haberes = self.siif_comprobantes_haberes.copy()
+        comprobantes_haberes =  self.import_siif_comprobantes_haberes(
+            ejercicio=ejercicio, neto_art=neto_art, neto_gcias_310=neto_gcias_310
+        ).copy()
         rdeu = self.import_siif_rdeu012()
-        rdeu = rdeu >> \
-            dplyr.select(
-                ~f.mes_hasta, ~f.fecha_aprobado, ~f.fecha_desde, 
-                ~f.fecha_hasta, ~f.org_fin) >> \
-            dplyr.distinct(f.nro_comprobante, f.mes, _keep_all=True) >> \
-            dplyr.semi_join(comprobantes_haberes, by=f.nro_comprobante) >> \
-            dplyr.distinct(f.nro_comprobante, f.mes, f.saldo, _keep_all=True) >> \
-            dplyr.mutate(
-                importe = f.saldo * (-1),
-                clase_reg = 'CYO',
-                clase_mod = 'NOR',
-                clase_gto = 'RDEU',
-                es_comprometido = True,
-                es_verificado = True,
-                es_aprobado = True,
-                es_pagado = False
-            )  >> \
-            dplyr.select(~f.saldo)
+        rdeu = rdeu.drop(columns=[
+            'mes_hasta', 'fecha_aprobado', 'fecha_desde', 'fecha_hasta', 'org_fin'
+        ])
+        rdeu = rdeu.drop_duplicates(subset=['nro_comprobante', 'mes'])
+        semi_table = pd.merge(
+            rdeu, comprobantes_haberes, how='inner', copy=False, on='nro_comprobante'
+        )
+        in_both = rdeu['nro_comprobante'].isin(semi_table['nro_comprobante'])
+        rdeu = rdeu[in_both] 
+        rdeu = rdeu.drop_duplicates(subset=['nro_comprobante', 'mes', 'saldo'])
+        rdeu['importe'] = rdeu['saldo'] * (-1)
+        rdeu['clase_reg'] = 'CYO'
+        rdeu['clase_nor'] = 'NOR'
+        rdeu['clase_gto'] = 'RDEU'
+        rdeu['es_comprometido'] = True
+        rdeu['es_verificado'] = True
+        rdeu['es_aprobado'] = True
+        rdeu['es_pagado'] = True
+        rdeu = rdeu.drop(columns=['saldo'])
+        # rdeu = rdeu >> \
+        #     dplyr.select(
+        #         ~f.mes_hasta, ~f.fecha_aprobado, ~f.fecha_desde, 
+        #         ~f.fecha_hasta, ~f.org_fin) >> \
+        #     dplyr.distinct(f.nro_comprobante, f.mes, _keep_all=True) >> \
+        #     dplyr.semi_join(comprobantes_haberes, by=f.nro_comprobante) >> \
+        #     dplyr.distinct(f.nro_comprobante, f.mes, f.saldo, _keep_all=True) >> \
+        #     dplyr.mutate(
+        #         importe = f.saldo * (-1),
+        #         clase_reg = 'CYO',
+        #         clase_mod = 'NOR',
+        #         clase_gto = 'RDEU',
+        #         es_comprometido = True,
+        #         es_verificado = True,
+        #         es_aprobado = True,
+        #         es_pagado = False
+        #     )  >> \
+        #     dplyr.select(~f.saldo)
         self.siif_comprobantes_haberes_neto_rdeu = pd.concat(
             [comprobantes_haberes, rdeu])
 
@@ -486,29 +507,58 @@ class ImportDataFrame(HanglingPath):
 
         # Incorporamos los comprobantes de gastos pagados 
         # en periodos posteriores (Deuda Flotante)
-        rdeu = rdeu >> \
-            dplyr.filter_(f.ejercicio == ejercicio) >> \
-            dplyr.mutate(
-                fecha = f.fecha_hasta, mes = f.mes_hasta
-            ) >> \
-            dplyr.select(
-                ~f.mes_hasta, ~f.fecha_aprobado, ~f.fecha_desde, 
-                ~f.fecha_hasta, ~f.org_fin) >> \
-            dplyr.semi_join(comprobantes_haberes, by=f.nro_comprobante) >> \
-            dplyr.distinct(f.nro_comprobante, f.mes, f.saldo, _keep_all=True) >> \
-            dplyr.mutate(
-                importe = f.saldo,
-                clase_reg = 'CYO',
-                clase_mod = 'NOR',
-                clase_gto = 'RDEU',
-                es_comprometido = True,
-                es_verificado = True,
-                es_aprobado = True,
-                es_pagado = True
-            ) >> \
-            dplyr.select(~f.saldo)
-        rdeu = pd.DataFrame(rdeu)
-        rdeu = rdeu.loc[rdeu['ejercicio'] == ejercicio]
+        if isinstance(ejercicio, list):
+            rdeu = rdeu.loc[rdeu['ejercicio'].isin(ejercicio)]
+        else:
+            rdeu = rdeu.loc[rdeu['ejercicio'].isin([ejercicio])]
+        rdeu['fecha'] = rdeu['fecha_hasta']
+        rdeu['mes'] = rdeu['mes_hasta']
+        rdeu = rdeu.drop(columns=[
+            'mes_hasta', 'fecha_aprobado', 'fecha_desde', 'fecha_hasta', 'org_fin'
+        ])
+        semi_table = pd.merge(
+            rdeu, comprobantes_haberes, how='inner', copy=False, on='nro_comprobante'
+        )
+        in_both = rdeu['nro_comprobante'].isin(semi_table['nro_comprobante'])
+        rdeu = rdeu[in_both]
+        rdeu = rdeu.drop_duplicates(subset=['nro_comprobante', 'mes', 'saldo'])
+        rdeu['importe'] = rdeu['saldo']
+        rdeu['clase_reg'] = 'CYO'
+        rdeu['clase_nor'] = 'NOR'
+        rdeu['clase_gto'] = 'RDEU'
+        rdeu['es_comprometido'] = True
+        rdeu['es_verificado'] = True
+        rdeu['es_aprobado'] = True
+        rdeu['es_pagado'] = True
+        rdeu = rdeu.drop(columns=['saldo'])
+
+        # rdeu = rdeu >> \
+        #     dplyr.filter_(f.ejercicio == ejercicio) >> \
+        #     dplyr.mutate(
+        #         fecha = f.fecha_hasta, mes = f.mes_hasta
+        #     ) >> \
+        #     dplyr.select(
+        #         ~f.mes_hasta, ~f.fecha_aprobado, ~f.fecha_desde, 
+        #         ~f.fecha_hasta, ~f.org_fin) >> \
+        #     dplyr.semi_join(comprobantes_haberes, by=f.nro_comprobante) >> \
+        #     dplyr.distinct(f.nro_comprobante, f.mes, f.saldo, _keep_all=True) >> \
+        #     dplyr.mutate(
+        #         importe = f.saldo,
+        #         clase_reg = 'CYO',
+        #         clase_mod = 'NOR',
+        #         clase_gto = 'RDEU',
+        #         es_comprometido = True,
+        #         es_verificado = True,
+        #         es_aprobado = True,
+        #         es_pagado = True
+        #     ) >> \
+        #     dplyr.select(~f.saldo)
+        # rdeu = pd.DataFrame(rdeu)
+        # rdeu = rdeu.loc[rdeu['ejercicio'] == ejercicio]
+        if isinstance(ejercicio, list):
+            rdeu = rdeu.loc[rdeu['ejercicio'].isin(ejercicio)]
+        else:
+            rdeu = rdeu.loc[rdeu['ejercicio'].isin([ejercicio])]
         self.siif_comprobantes_haberes_neto_rdeu = pd.concat(
             [self.siif_comprobantes_haberes_neto_rdeu, rdeu])
         return self.siif_comprobantes_haberes_neto_rdeu
@@ -537,7 +587,10 @@ class ImportDataFrame(HanglingPath):
         self, ejercicio:str = None, cta_contable:str = None) -> pd.DataFrame:
         df = MayorContableRcocc31().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         if cta_contable != None:
             df = df.loc[df['cta_contable'] == cta_contable]
         df.reset_index(drop=True, inplace=True)

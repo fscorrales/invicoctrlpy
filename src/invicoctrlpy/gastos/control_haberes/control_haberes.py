@@ -94,36 +94,47 @@ class ControlHaberes(ImportDataFrame):
         return self.sscc_banco_invico
 
     # --------------------------------------------------
-    def control_mes(self):
-        siif_haberes_mes = self.siif_comprobantes_haberes_neto_rdeu.copy()
-        siif_haberes_mes = siif_haberes_mes >> \
-            dplyr.select(f.mes, f.importe) >> \
-            dplyr.group_by(f.mes) >> \
-            dplyr.summarise(ejecutado_siif = base.sum_(f.importe),
-                            _groups = 'drop')
-        sscc_mes = self.sscc_banco_invico.copy()
-        sscc_mes = sscc_mes >> \
-            dplyr.select(
-                f.mes, f.importe
-            ) >> \
-            dplyr.group_by(f.mes) >> \
-            dplyr.summarise(
-                pagado_sscc = base.sum_(f.importe),
-                _groups = 'drop')
-        control_mes = siif_haberes_mes >> \
-            dplyr.full_join(sscc_mes) >> \
-            dplyr.mutate(
-                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-            ) >> \
-            dplyr.mutate(
-                diferencia = f.ejecutado_siif- f.pagado_sscc
-            )
+    def control_cruzado(self, groupby_cols:list = ['ejercicio', 'mes']):
+        siif = self.siif_comprobantes_haberes_neto_rdeu.copy()
+        siif = siif.loc[:, groupby_cols + ['importe']]
+        siif = siif.groupby(groupby_cols)['importe'].sum()
+        siif = siif.reset_index()
+        siif = siif.rename(columns={'importe':'ejecutado_siif'})
+        # siif = siif >> \
+        #     dplyr.select(f.mes, f.importe) >> \
+        #     dplyr.group_by(f.mes) >> \
+        #     dplyr.summarise(ejecutado_siif = base.sum_(f.importe),
+        #                     _groups = 'drop')
+        sscc = self.sscc_banco_invico.copy()
+        sscc = sscc.loc[:, groupby_cols + ['importe']]
+        sscc = sscc.groupby(groupby_cols)['importe'].sum()
+        sscc = sscc.reset_index()
+        sscc = sscc.rename(columns={'importe':'pagado_sscc'})
+        # sscc = sscc >> \
+        #     dplyr.select(
+        #         f.mes, f.importe
+        #     ) >> \
+        #     dplyr.group_by(f.mes) >> \
+        #     dplyr.summarise(
+        #         pagado_sscc = base.sum_(f.importe),
+        #         _groups = 'drop')
+        df = pd.merge(siif, sscc, how='outer', on=groupby_cols, copy=False)
+        df[['ejecutado_siif', 'pagado_sscc']] = df[['ejecutado_siif', 'pagado_sscc']].fillna(0)
+        df['diferencia'] = df.ejecutado_siif - df.pagado_sscc
+        # df = siif >> \
+        #     dplyr.full_join(sscc) >> \
+        #     dplyr.mutate(
+        #         dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+        #     ) >> \
+        #     dplyr.mutate(
+        #         diferencia = f.ejecutado_siif- f.pagado_sscc
+        #     )
         #     dplyr.filter_(~dplyr.near(f.diferencia, 0))
-        control_mes.sort_values(by=['mes'], inplace= True)
-        control_mes = pd.DataFrame(control_mes)
-        control_mes['dif_acum'] = control_mes['diferencia'].cumsum()
-        control_mes.reset_index(drop=True, inplace=True)
-        return control_mes
+        df.sort_values(by=['mes'], inplace= True)
+        df = pd.DataFrame(df)
+        df['dif_acum'] = df['diferencia'].cumsum()
+        df.reset_index(drop=True, inplace=True)
+        return df
 
     # --------------------------------------------------
     def control_completo(self):
