@@ -130,7 +130,7 @@ class ControlHaberes(ImportDataFrame):
         #         diferencia = f.ejecutado_siif- f.pagado_sscc
         #     )
         #     dplyr.filter_(~dplyr.near(f.diferencia, 0))
-        df.sort_values(by=['mes'], inplace= True)
+        df = df.sort_values(by=['ejercicio','mes'])
         df = pd.DataFrame(df)
         df['dif_acum'] = df['diferencia'].cumsum()
         df.reset_index(drop=True, inplace=True)
