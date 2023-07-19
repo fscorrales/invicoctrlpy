@@ -4,6 +4,7 @@ Author: Fernando Corrales <corrales_fernando@hotmail.com>
 Purpose: SIIF Recursos vs SSCC depósitos
 Data required:
     - SIIF rci02
+    - SIIF ri102 (no obligatorio)
     - SSCC Consulta General de Movimiento
     - SSCC ctas_ctes (manual data)
 Packages:
@@ -92,6 +93,12 @@ class ControlRecursos(ImportDataFrame):
                     np.where(df['cta_cte'].isin([
                         "130832-12", "334", "Macro", "Patagonia"]), 'RECUPEROS', 
                         'OTROS'))
+        df.reset_index(drop=True, inplace=True)
+        return df
+
+    # --------------------------------------------------
+    def import_siif_ri102(self):
+        df = super().import_siif_ri102(self.ejercicio)
         df.reset_index(drop=True, inplace=True)
         return df
 

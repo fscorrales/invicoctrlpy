@@ -18,7 +18,7 @@ from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   JoinComprobantesGtosGpoPart,
                                   JoinPptoGtosFteDesc, MayorContableRcocc31,
                                   PptoGtosDescRf610, PptoGtosFteRf602,
-                                  ResumenFdosRfondo07tp)
+                                  PptoRecRi102, ResumenFdosRfondo07tp)
 from invicodatpy.slave.migrate_slave import MigrateSlave
 from invicodatpy.sscc.all import BancoINVICO, CtasCtes, SdoFinalBancoINVICO
 
@@ -580,6 +580,19 @@ class ImportDataFrame(HanglingPath):
             left_on='cta_cte', right_on='siif_recursos_cta_cte')
         df['cta_cte'] = df['map_to']
         df.drop(['map_to', 'siif_recursos_cta_cte'], axis='columns', inplace=True)
+        return df
+
+    # --------------------------------------------------
+    def import_siif_ri102(self, ejercicio:str = None) -> pd.DataFrame:
+        df = PptoRecRi102().from_sql(self.db_path + '/siif.sqlite')
+        if ejercicio != None:
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
+        # if ejercicio != None:
+        #     df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)
         return df
 
     # --------------------------------------------------
