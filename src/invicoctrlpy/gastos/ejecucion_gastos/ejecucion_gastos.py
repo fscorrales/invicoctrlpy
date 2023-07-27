@@ -65,8 +65,7 @@ class EjecucionGastos(ImportDataFrame):
         df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
         df.drop(
             labels=['org', 'pendiente', 'programa', 
-            'subprograma', 'proyecto', 'actividad', 
-            'grupo'], 
+            'subprograma', 'proyecto', 'actividad'], 
             axis=1, inplace=True
             )
         df = df >>\
