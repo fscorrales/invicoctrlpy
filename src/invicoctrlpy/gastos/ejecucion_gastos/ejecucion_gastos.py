@@ -64,10 +64,11 @@ class EjecucionGastos(ImportDataFrame):
         df.sort_values(by=['ejercicio', 'estructura'], ascending=[False, True],inplace=True)
         df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
         df.drop(
-            labels=['org', 'pendiente', 'programa', 
+            labels=['org', 'pendiente', 
             'subprograma', 'proyecto', 'actividad'], 
             axis=1, inplace=True
             )
+        df["programa"] = df['programa'].astype('int')
         df = df >>\
             dplyr.select(
                 f.ejercicio, f.estructura, f.partida, f.fuente,
