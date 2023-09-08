@@ -60,20 +60,25 @@ class FlujoCaja(ImportDataFrame):
     def import_banco_invico(self):
         df = super().import_banco_invico(self.ejercicio)
         recursos = [
-            '002', '001', '012', '211', '056', 
-            '216', '218', '220', '222', '057'
+            '001', '002', '012', '022', '056', 
+            '057', '062', '141', '211', '212', 
+            '216', '218', '220', '222', '226', 
+            '228'
         ]
+
         funcionamiento = [
-            '023', '024', '029', '027', '031',
+            '005', '023', '024', '029', '031',
             '032', '033', '036', '037', '040',
             '043', '049', '059'
         ]
+
         inversion_obras = [
-            '019', '020', '021', '027', '041',
-            '052', '053', '065', '066', '072',
-            '143', '210', '217', '219', '221',
-            '142', '035', '213'
+            '018', '019', '020', '021', '027', '035', '041',
+            '052', '053', '065', '066', '072', '112', '142'
+            '143', '162', '210', '213', '217', '219', '221',
+            '225', '227'
         ]
+
         # df['clase'] = np.where(df['cod_imputacion'].isin(recursos), 'Recursos',
         #                 np.where(df['cod_imputacion'].isin(funcionamiento), 'Gtos. Funcionamiento',
         #                     np.where(df['cod_imputacion'].isin(inversion_obras), 'Inversión Obras',  
