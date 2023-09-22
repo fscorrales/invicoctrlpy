@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 import pandas as pd
-from datar import base, dplyr, f, tidyr
+import numpy as np
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 from invicodb.update import update_db
 
@@ -230,7 +230,7 @@ class ControlRetenciones(ImportDataFrame):
 
     # --------------------------------------------------
     def icaro_summarize(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes']
+        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte']
     ) -> pd.DataFrame:
         """
         Perform cross-control of data.
@@ -239,7 +239,8 @@ class ControlRetenciones(ImportDataFrame):
         the specified columns and summing the values within each group.
 
         Args:
-            groupby_cols (list): List of column names to group by.
+            groupby_cols (List[str], optional): A list of column names to group and
+                perform the summary on. Default is ['ejercicio', 'mes', 'cta_cte'].
 
         Returns:
             pd.DataFrame: Pandas DataFrame containing the cross-controlled data.
@@ -291,7 +292,7 @@ class ControlRetenciones(ImportDataFrame):
             'tipo_comprobante', 'debitos', 'auxiliar_1'
         ]]
         siif_contratistas = siif_contratistas.rename(columns={
-            'debitos': 'importe',
+            'debitos': 'importe_neto',
             'auxiliar_1': 'cuit'
         })
         df = siif_contratistas.merge(siif_banco, how='left', on='nro_entrada')
@@ -340,14 +341,110 @@ class ControlRetenciones(ImportDataFrame):
         df = siif_retenciones.merge(siif_banco, how='left', on='nro_entrada')
         retenciones_obras = ['110', '111', '112', '113', '114', '337']
         df = df.loc[df['cod_ret'].isin(retenciones_obras)]
-        df.reset_index(drop=True, inplace=True)
-        df = df.pivot_table(
-            index = ['ejercicio', 'mes', 'cta_cte'], columns='cod_ret', values='importe', 
+        df['cod_ret'] = np.select(
+            [
+                df['cod_ret'] == '110',
+                df['cod_ret'] == '111',
+                df['cod_ret'] == '112',
+                df['cod_ret'] == '113',
+                df['cod_ret'] == '114',
+                df['cod_ret'] == '337'
+            ],
+            ['iibb', 'sellos', 'lp', 'gcias', 'suss', 'invico']
+        )
+        return df
+
+    # --------------------------------------------------
+    def siif_summarize(
+        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte']
+    ) -> pd.DataFrame:
+        """
+        Summarize 'siif' (Sistema de Información Integrado de Finanzas) data.
+
+        This method summarizes 'siif' data for both contractor payments and retentions
+        based on the specified grouping columns. It calculates the total payments and
+        retentions for each group and computes the gross amount by adding the retentions
+        to the net amount.
+
+        Args:
+            groupby_cols (List[str], optional): A list of column names to group and
+                perform the summary on. Default is ['ejercicio', 'mes', 'cta_cte'].
+
+        Returns:
+            pd.DataFrame: A Pandas DataFrame containing the summarized 'siif' data.
+
+        Example:
+            To summarize 'siif' data based on custom grouping columns:
+
+            ```python
+            siif_summary = control.siif_summarize(groupby_cols=['ejercicio', 'mes'])
+            ```
+        """
+        contratistas = self.import_siif_pagos_contratistas().copy()
+        contratistas = contratistas.groupby(groupby_cols).sum(numeric_only=True)
+        contratistas = contratistas.reset_index()
+        retenciones = self.import_siif_pagos_retenciones().copy()
+        retenciones.reset_index(drop=True, inplace=True)
+        retenciones = retenciones.pivot_table(
+            index = groupby_cols, columns='cod_ret', values='importe', 
             aggfunc='sum', fill_value=0
         )
+        retenciones = retenciones.reset_index()
+        retenciones = retenciones.rename_axis(None, axis=1)
+        retenciones['retenciones'] = retenciones.sum(axis=1, numeric_only= True)
+        df = contratistas.merge(
+            retenciones, how='outer', on=groupby_cols
+        )
+        df = df.fillna(0)
+        df['importe_bruto'] = df['importe_neto'] + df['retenciones']
+        return df
+
+    # --------------------------------------------------
+    def icaro_vs_siif(
+        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte'],
+        only_diff = False
+    ) -> pd.DataFrame:
+        """
+        Compare 'icaro' data with 'siif' data.
+
+        This method performs a comparison between summarized 'icaro' data and summarized
+        'siif' (Sistema de Información Integrado de Finanzas) data based on the specified
+        grouping columns. It calculates the differences between the two datasets and can
+        optionally filter and return only rows with differences.
+
+        Args:
+            groupby_cols (List[str], optional): A list of column names to group and
+                perform the comparison on. Default is ['ejercicio', 'mes', 'cta_cte'].
+            only_diff (bool, optional): Flag indicating whether to return only rows with
+                differences. Default is False.
+
+        Returns:
+            pd.DataFrame: A Pandas DataFrame containing the comparison results between
+            'icaro' and 'siif' data.
+
+        Example:
+            To compare 'icaro' and 'siif' data based on custom grouping columns and
+            return only rows with differences:
+
+            ```python
+            diff_data = control.icaro_vs_siif(groupby_cols=['ejercicio', 'mes'], only_diff=True)
+            ```
+        """
+        icaro = self.icaro_summarize(groupby_cols=groupby_cols).copy()
+        icaro = icaro.set_index(groupby_cols)
+        siif = self.siif_summarize(groupby_cols=groupby_cols).copy()
+        siif = siif.set_index(groupby_cols)
+        df = icaro.subtract(siif)
         df = df.reset_index()
-        df = df.rename_axis(None, axis=1)
-        df['total'] = df.sum(axis=1, numeric_only= True)
+        df = df.fillna(0)
+        #Reindexamos el DataFrame
+        icaro = icaro.reset_index()
+        df = df.reindex(columns=icaro.columns)
+        if only_diff:
+            # Seleccionar solo las columnas numéricas
+            numeric_cols = df.select_dtypes(include=np.number).columns
+            # Filtrar el DataFrame utilizando las columnas numéricas válidas
+            df = df[df[numeric_cols].sum(axis=1) != 0]
         return df
 
     # --------------------------------------------------
@@ -366,7 +463,7 @@ class ControlRetenciones(ImportDataFrame):
 
     # --------------------------------------------------
     def sgf_summarize(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes']
+        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte']
     ) -> pd.DataFrame:
         """
         Perform cross-control of SGF's data.
@@ -405,7 +502,7 @@ class ControlRetenciones(ImportDataFrame):
 
     # --------------------------------------------------
     def sscc_summarize(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes']
+        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte']
     ) -> pd.DataFrame:
         """
         Perform cross-control of Banco INVICO's data.
@@ -442,7 +539,7 @@ class ControlRetenciones(ImportDataFrame):
 
     # --------------------------------------------------
     def sgf_vs_sscc(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes']
+        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte']
     ) -> pd.DataFrame:
         """
         Perform a comparison between 'sgf' and 'sscc' data.
@@ -454,7 +551,7 @@ class ControlRetenciones(ImportDataFrame):
 
         Args:
             groupby_cols (List[str], optional): A list of column names to group and
-                perform the comparison on. Default is ['ejercicio', 'mes'].
+                perform the comparison on. Default is ['ejercicio', 'mes', 'cta_cte'].
 
         Returns:
             pd.DataFrame: A Pandas DataFrame containing the comparison results, including
@@ -479,7 +576,8 @@ class ControlRetenciones(ImportDataFrame):
 
     # --------------------------------------------------
     def icaro_vs_invico(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes']
+        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte'],
+        only_diff = False
     ) -> pd.DataFrame:
         """
         Perform cross-control analysis between 'icaro' and 'invico' data.
@@ -490,7 +588,9 @@ class ControlRetenciones(ImportDataFrame):
 
         Args:
             groupby_cols (List[str], optional): A list of column names to group and
-                perform cross-control analysis on. Default is ['ejercicio', 'mes'].
+                perform cross-control analysis on. Default is ['ejercicio', 'mes', 'cta_cte'].
+            only_diff (bool, optional): Flag indicating whether to return only rows with
+                differences. Default is False.
 
         Returns:
             pd.DataFrame: A Pandas DataFrame containing the results of the cross-control
@@ -510,4 +610,12 @@ class ControlRetenciones(ImportDataFrame):
         df = icaro.subtract(invico)
         df = df.reset_index()
         df = df.fillna(0)
+        #Reindexamos el DataFrame
+        icaro = icaro.reset_index()
+        df = df.reindex(columns=icaro.columns)
+        if only_diff:
+            # Seleccionar solo las columnas numéricas
+            numeric_cols = df.select_dtypes(include=np.number).columns
+            # Filtrar el DataFrame utilizando las columnas numéricas válidas
+            df = df[df[numeric_cols].sum(axis=1) != 0]
         return df
