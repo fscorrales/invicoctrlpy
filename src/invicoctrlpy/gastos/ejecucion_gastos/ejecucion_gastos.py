@@ -4,6 +4,7 @@ Author: Fernando Corrales <corrales_fernando@hotmail.com>
 Purpose: Distintos informes relacionados a la ejecución de Obras
 Data required:
     - Icaro
+    - SIIF rfp_p605b (no obligatorio)
     - SIIF rf602
     - SIIF rf610
 Packages:
@@ -51,11 +52,18 @@ class EjecucionGastos(ImportDataFrame):
             self.db_path + '/siif.sqlite')
         update_siif.update_ppto_gtos_fte_rf602()
         update_siif.update_ppto_gtos_desc_rf610()
+        update_siif.update_form_gto_rfp_p605b()
 
     # --------------------------------------------------
     def import_dfs(self):
         self.import_ctas_ctes()
         self.siif_desc_pres = self.import_siif_desc_pres(ejercicio_to=self.ejercicio)
+
+    # --------------------------------------------------
+    def import_siif_rfp_p605b(self):
+        df = super().import_siif_rfp_p605b(self.ejercicio)
+        df.reset_index(drop=True, inplace=True)
+        return df
 
     # --------------------------------------------------
     def import_siif_gtos_desc(self):

@@ -18,7 +18,7 @@ from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   JoinComprobantesGtosGpoPart,
                                   JoinPptoGtosFteDesc, MayorContableRcocc31,
                                   PptoGtosDescRf610, PptoGtosFteRf602,
-                                  PptoRecRi102, ResumenFdosRfondo07tp)
+                                  PptoRecRi102, ResumenFdosRfondo07tp, FormGtoRfpP605b)
 from invicodatpy.slave.migrate_slave import MigrateSlave
 from invicodatpy.sscc.all import BancoINVICO, CtasCtes, SdoFinalBancoINVICO
 
@@ -275,6 +275,19 @@ class ImportDataFrame(HanglingPath):
                 df = df.loc[df['ejercicio'].isin([ejercicio])]
         self.siif_rf602 = df
         return self.siif_rf602
+
+    # --------------------------------------------------
+    def import_siif_rfp_p605b(self, ejercicio:str = None) -> pd.DataFrame:
+        df = FormGtoRfpP605b().from_sql(self.db_path + '/siif.sqlite')
+        if ejercicio != None:
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
+        # if ejercicio != None:
+        #     df = df.loc[df['ejercicio'] == ejercicio]
+        df.reset_index(drop=True, inplace=True)
+        return df
 
     # --------------------------------------------------
     def import_siif_desc_pres(self, ejercicio_to:str = None) -> pd.DataFrame:
