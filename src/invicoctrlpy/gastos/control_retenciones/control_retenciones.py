@@ -521,25 +521,38 @@ class ControlRetenciones(ImportDataFrame):
             '018', '019', '020', '021', '027', '035', '041',
             '052', '053', '065', '066', '072', '112', '142'
             '143', '162', '210', '213', '217', '219', '221',
-            '225', '227'
+            '225', '227','034'
         ]
         df = df.loc[
             df['cod_imputacion'].isin(inversion_obras)
         ]
+        df['retenciones'] = df.loc[df['cod_imputacion'] == '034']['importe'] * -1
+        # Filtrar los registros que cumplan ambas condiciones
+        # ['iibb', 'sellos', 'lp', 'gcias', 'suss', 'invico']
+        df.loc[(df['concepto'].str.contains('IIBB')) & (df['cod_imputacion'] == '034'), 'iibb'] = df['retenciones']
+        df.loc[(df['concepto'].str.contains('SELLOS')) & (df['cod_imputacion'] == '034'), 'sellos'] = df['retenciones']
+        df.loc[(df['concepto'].str.contains('GCI')) & (df['cod_imputacion'] == '034'), 'gcias'] = df['retenciones']
+        df.loc[(df['concepto'].str.contains('SUSS')) & (df['cod_imputacion'] == '034'), 'suss'] = df['retenciones']
+        df.loc[(df['concepto'].str.contains('INV')) & (df['cod_imputacion'] == '034'), 'invico'] = df['retenciones']
+        #df['otra_ret'] = df['retenciones'] - df['iibb'] - df['sellos'] - df['gcias'] - df['suss'] - df['invico']
+        df['importe'] = df.loc[df['cod_imputacion'] != '034']['importe']
         df = df.drop(
             ['fecha', 'es_cheque','beneficiario', 'concepto', 'moneda',
             'libramiento', 'cod_imputacion', 'imputacion'], 
             axis=1
         )
+        df = df.fillna(0)
         df = df.groupby(groupby_cols).sum(numeric_only=True)
         df = df.reset_index()
         df['importe'] = df['importe'] * -1
-        df = df.rename(columns={'importe':'sscc_importe'})
+        df = df.rename(columns={'importe':'importe_neto'})
+        df['importe_bruto'] = df['importe_neto'] + df['retenciones']
         return df
 
     # --------------------------------------------------
     def sgf_vs_sscc(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte']
+        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte'],
+        only_diff = False
     ) -> pd.DataFrame:
         """
         Perform a comparison between 'sgf' and 'sscc' data.
@@ -552,6 +565,8 @@ class ControlRetenciones(ImportDataFrame):
         Args:
             groupby_cols (List[str], optional): A list of column names to group and
                 perform the comparison on. Default is ['ejercicio', 'mes', 'cta_cte'].
+            only_diff (bool, optional): Flag indicating whether to return only rows with
+                differences. Default is False.
 
         Returns:
             pd.DataFrame: A Pandas DataFrame containing the comparison results, including
@@ -565,13 +580,20 @@ class ControlRetenciones(ImportDataFrame):
             ```
         """
         sgf =  self.sgf_summarize(groupby_cols=groupby_cols).copy()
-        sgf = sgf.rename(columns={'importe_neto':'sgf_importe'})
+        sgf = sgf.set_index(groupby_cols)
         sscc = self.sscc_summarize(groupby_cols=groupby_cols).copy()
-        df = sgf.merge(
-            sscc, how='left', on=groupby_cols, copy=False
-        )
+        sscc = sscc.set_index(groupby_cols)
+        df = sgf.subtract(sscc)
+        df = df.reset_index()
         df = df.fillna(0)
-        df['dif_sgf_sscc'] = df['sgf_importe'] - df['sscc_importe'] 
+        #Reindexamos el DataFrame
+        sgf = sgf.reset_index()
+        df = df.reindex(columns=sgf.columns)
+        if only_diff:
+            # Seleccionar solo las columnas numéricas
+            numeric_cols = df.select_dtypes(include=np.number).columns
+            # Filtrar el DataFrame utilizando las columnas numéricas válidas
+            df = df[df[numeric_cols].sum(axis=1) != 0]
         return df
 
     # --------------------------------------------------
@@ -600,14 +622,67 @@ class ControlRetenciones(ImportDataFrame):
             To perform a cross-control analysis based on custom grouping columns:
 
             ```python
-            result = control.control_cruzado(groupby_cols=['ejercicio', 'mes'])
+            result = control.icaro_vs_invico(groupby_cols=['ejercicio', 'mes'])
             ```
         """
         icaro = self.icaro_summarize(groupby_cols=groupby_cols).copy()
+        icaro['sellos'] = icaro['sellos'] + icaro['lp']
+        icaro = icaro.drop(columns=['lp'])
         icaro = icaro.set_index(groupby_cols)
         invico = self.sgf_summarize(groupby_cols=groupby_cols).copy()
         invico = invico.set_index(groupby_cols)
         df = icaro.subtract(invico)
+        df = df.reset_index()
+        df = df.fillna(0)
+        #Reindexamos el DataFrame
+        icaro = icaro.reset_index()
+        df = df.reindex(columns=icaro.columns)
+        if only_diff:
+            # Seleccionar solo las columnas numéricas
+            numeric_cols = df.select_dtypes(include=np.number).columns
+            # Filtrar el DataFrame utilizando las columnas numéricas válidas
+            df = df[df[numeric_cols].sum(axis=1) != 0]
+        return df
+
+    # --------------------------------------------------
+    def icaro_vs_sscc(
+        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte'],
+        only_diff = False
+    ) -> pd.DataFrame:
+        """
+        Compares data between the 'icaro' and 'sscc' summaries.
+
+        This method calculates the difference between the 'icaro' and 'sscc' summaries
+        based on the specified grouping columns. It optionally allows you to filter
+        and return only rows with differences.
+
+        Args:
+            groupby_cols (list, optional): A list of column names to group by.
+                Defaults to ['ejercicio', 'mes', 'cta_cte'].
+            only_diff (bool, optional): If True, returns only rows with differences.
+                Defaults to False.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the comparison results.
+
+        Notes:
+            - The 'sellos' and 'lp' columns in 'icaro' are combined into a single 'sellos' column.
+            - The resulting DataFrame is reindexed to match the 'icaro' DataFrame columns.
+        
+        Example:
+            To perform a cross-control analysis based on custom grouping columns:
+
+            ```python
+            result = control.icaro_vs_sscc(groupby_cols=['ejercicio', 'mes'])
+            ```
+        """
+        icaro = self.icaro_summarize(groupby_cols=groupby_cols).copy()
+        icaro['sellos'] = icaro['sellos'] + icaro['lp']
+        icaro = icaro.drop(columns=['lp'])
+        icaro = icaro.set_index(groupby_cols)
+        sscc = self.sscc_summarize(groupby_cols=groupby_cols).copy()
+        sscc = sscc.set_index(groupby_cols)
+        df = icaro.subtract(sscc)
         df = df.reset_index()
         df = df.fillna(0)
         #Reindexamos el DataFrame
