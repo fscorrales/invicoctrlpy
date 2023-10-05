@@ -57,7 +57,10 @@ class ImportDataFrame(HanglingPath):
         df = MigrateSlave().from_sql(
             self.db_path + '/slave.sqlite', 'honorarios_factureros')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         df.reset_index(drop=True, inplace=True)  
         self.slave = df
         return self.slave
@@ -364,7 +367,10 @@ class ImportDataFrame(HanglingPath):
     def import_siif_rcg01_uejp(self, ejercicio:str = None) -> pd.DataFrame:
         df = ComprobantesGtosRcg01Uejp().from_sql(self.db_path + '/siif.sqlite')
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'siif_gastos_cta_cte']]
         df = pd.merge(
@@ -729,7 +735,10 @@ class ImportDataFrame(HanglingPath):
         df = df.loc[df['destino'].isin(['HONORARIOS - FUNCIONAMIENTO', 
         'COMISIONES - FUNCIONAMIENTO', 'HONORARIOS - EPAM'])]
         if ejercicio != None:
-            df = df.loc[df['ejercicio'] == ejercicio]
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'sgf_cta_cte']]
         df = pd.merge(

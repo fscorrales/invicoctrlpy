@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Author: Fernando Corrales <corrales_fernando@hotmail.com>
+Author: Fernando Corrales <fscpython@gmail.com>
 Purpose: Control ejecución partida 100 SIIF (haberes)
 Data required:
     - SIIF rcg01_uejp

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Author: Fernando Corrales <corrales_fernando@hotmail.com>
+Author: Fernando Corrales <fscpython@gmail.com>
 Purpose: SIIF Fondos Permanentes y Cajas Chicas
 Data required:
     - SIIF rcg01_uejp

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Author: Fernando Corrales <fscpython@hotmail.com>
+Author: Fernando Corrales <fscpython@gmail.com>
 Purpose: Control de Escribanos (FEI)
 Data required:
     - SGF Resumen Rend por Proveedor

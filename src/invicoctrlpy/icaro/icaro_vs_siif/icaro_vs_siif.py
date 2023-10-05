@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Author: Fernando Corrales <corrales_fernando@hotmail.com>
+Author: Fernando Corrales <fscpython@gmail.com>
 Purpose: Icaro vs SIIF budget execution
 Data required:
     - Icaro

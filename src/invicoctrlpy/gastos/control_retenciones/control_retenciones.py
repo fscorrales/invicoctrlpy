@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Author: Fernando Corrales <fscpython@hotmail.com>
+Author: Fernando Corrales <fscpython@gmail.com>
 Purpose: Control de Retenciones Banco INVICO vs SIIF o Icaro
 Data required:
     - Icaro
