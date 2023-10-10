@@ -193,6 +193,10 @@ class ControlHonorarios(ImportDataFrame):
             - Missing values: Fills missing values with 0.
         """
         slave = self.import_slave().copy()
+        slave = slave.rename(columns={'otras_retenciones': 'otras'})
+        slave['otras'] = slave['otras'] + slave['anticipo'] + slave['descuento'] + slave['embargo'] + slave['mutual']
+        slave['sellos'] = slave['sellos'] + slave['lp'] 
+        slave = slave.drop(columns=['anticipo', 'descuento', 'embargo', 'lp', 'mutual'])
         if only_importe_bruto:
             slave = slave.loc[:, groupby_cols + ['importe_bruto']]
         slave = slave.groupby(groupby_cols).sum(numeric_only=True)
@@ -312,6 +316,8 @@ class ControlHonorarios(ImportDataFrame):
             columns. If 'only_importe_bruto' is True, the DataFrame is filtered to include only 'importe_bruto'.
         """
         df = self.import_resumen_rend_honorarios().copy()
+        df['otras'] = df['otras'] + df['gcias'] + df['suss'] + df['invico'] + df['salud'] + df['mutual']
+        df = df.drop(['gcias', 'suss', 'invico', 'salud', 'mutual'], axis=1)
         if only_importe_bruto:
             df = df.loc[:, groupby_cols + ['importe_bruto']]
         df = df.groupby(groupby_cols).sum(numeric_only=True)
@@ -366,6 +372,7 @@ class ControlHonorarios(ImportDataFrame):
         df['err_cta_cte'] = df['siif_cta_cte'] != df['slave_cta_cte']
         df['err_mes'] = df['siif_mes'] != df['slave_mes']
         df = df.loc[:, [
+            'ejercicio',
             'siif_nro', 'slave_nro', 'err_nro', 
             'siif_importe', 'slave_importe', 'err_importe', 
             'siif_mes', 'slave_mes', 'err_mes', 
@@ -427,9 +434,13 @@ class ControlHonorarios(ImportDataFrame):
         df = slave.subtract(sgf)
         df = df.reset_index()
         df = df.fillna(0)
+        #Reindexamos el DataFrame
+        slave = slave.reset_index()
+        df = df.reindex(columns=slave.columns)
         if only_diff:
             # Seleccionar solo las columnas numéricas
             numeric_cols = df.select_dtypes(include=np.number).columns
             # Filtrar el DataFrame utilizando las columnas numéricas válidas
-            df = df[df[numeric_cols].sum(axis=1) != 0]
+            # df = df[df[numeric_cols].sum(axis=1) != 0]
+            df = df[~np.isclose(df[numeric_cols].sum(axis=1), 0)]
         return df

@@ -104,8 +104,9 @@ class IcaroVsSIIF(ImportDataFrame):
         df = pd.merge(icaro, siif, how='outer', on = group_by, copy=False)
         df['diferencia'] = df['ejecucion_siif'] - df['ejecucion_icaro']
         df = df.fillna(0)
-        df = df.loc[~np.isclose(df['diferencia'], 0)]
         df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
+        df = df.loc[(df['diferencia'] < -0.1) | (df['diferencia'] > 0.1)]
+        df = df.reset_index(drop=True)
         return df
 
     # --------------------------------------------------
@@ -151,7 +152,10 @@ class IcaroVsSIIF(ImportDataFrame):
         df['err_mes'] = df.siif_mes != df.icaro_mes
         df['err_partida'] = df.siif_partida != df.icaro_partida
         df['err_fuente'] = df.siif_fuente != df.icaro_fuente
-        df['err_importe'] = ~np.isclose((df.siif_importe - df.icaro_importe), 0)
+        df['siif_importe'] = df['siif_importe'].fillna(0)
+        df['icaro_importe'] = df['icaro_importe'].fillna(0)
+        df['err_importe'] = (df.siif_importe - df.icaro_importe).abs()
+        df['err_importe'] = (df['err_importe'] > 0.01)
         df['err_cta_cte'] = df.siif_cta_cte != df.icaro_cta_cte
         df['err_cuit'] = df.siif_cuit != df.icaro_cuit
         df = df.loc[(
@@ -254,10 +258,18 @@ class IcaroVsSIIF(ImportDataFrame):
         df = df.fillna(0)
         df['err_nro_fondo'] = df.siif_nro_fondo != df.icaro_nro_fondo
         df['err_mes_pa6'] = df.siif_mes_pa6 != df.icaro_mes_pa6
-        df['err_importe_pa6'] = ~np.isclose((df.siif_importe_pa6 - df.icaro_importe_pa6), 0)
+        df['siif_importe_pa6'] = df['siif_importe_pa6'].fillna(0)
+        df['icaro_importe_pa6'] = df['icaro_importe_pa6'].fillna(0)
+        df['err_importe_pa6'] = (df.siif_importe_pa6 - df.icaro_importe_pa6).abs()
+        df['err_importe_pa6'] = (df['err_importe_pa6'] > 0.01)
+        # df['err_importe_pa6'] = ~np.isclose((df.siif_importe_pa6 - df.icaro_importe_pa6), 0)
         df['err_nro_reg'] = df.siif_nro_reg != df.icaro_nro_reg
         df['err_mes_reg'] = df.siif_mes_reg != df.icaro_mes_reg
-        df['err_importe_reg'] = ~np.isclose((df.siif_importe_reg - df.icaro_importe_reg), 0)
+        df['siif_importe_reg'] = df['siif_importe_reg'].fillna(0)
+        df['icaro_importe_reg'] = df['icaro_importe_reg'].fillna(0)
+        df['err_importe_reg'] = (df.siif_importe_reg - df.icaro_importe_reg).abs()
+        df['err_importe_reg'] = (df['err_importe_reg'] > 0.01)        
+        #df['err_importe_reg'] = ~np.isclose((df.siif_importe_reg - df.icaro_importe_reg), 0)
         df['err_tipo'] = df.siif_tipo != df.icaro_tipo
         df['err_fuente'] = df.siif_fuente != df.icaro_fuente
         df['err_cta_cte'] = df.siif_cta_cte != df.icaro_cta_cte
