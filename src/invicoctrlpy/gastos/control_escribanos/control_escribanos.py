@@ -336,6 +336,13 @@ class ControlEscribanos(ImportDataFrame):
         sgf = sgf.set_index(groupby_cols)
         sscc = self.sscc_summarize(groupby_cols=groupby_cols).copy()
         sscc = sscc.set_index(groupby_cols)
+        # Obtener los índices faltantes en sgf
+        missing_indices = sscc.index.difference(sgf.index)
+        # Reindexar el DataFrame sgf con los índices faltantes
+        sgf = sgf.reindex(sgf.index.union(missing_indices))
+        sscc = sscc.reindex(sgf.index)
+        sgf = sgf.fillna(0)
+        sscc = sscc.fillna(0)
         df = sgf.subtract(sscc)
         df = df.reset_index()
         df = df.fillna(0)
@@ -347,6 +354,7 @@ class ControlEscribanos(ImportDataFrame):
             numeric_cols = df.select_dtypes(include=np.number).columns
             # Filtrar el DataFrame utilizando las columnas numéricas válidas
             df = df[df[numeric_cols].sum(axis=1) != 0]
+            df = df.reset_index(drop=True)
         return df
 
     # --------------------------------------------------
@@ -384,6 +392,13 @@ class ControlEscribanos(ImportDataFrame):
         siif = siif.set_index(groupby_cols)
         sgf = self.sgf_summarize(groupby_cols=groupby_cols).copy()
         sgf = sgf.set_index(groupby_cols)
+        # Obtener los índices faltantes en siif
+        missing_indices = sgf.index.difference(siif.index)
+        # Reindexar el DataFrame siif con los índices faltantes
+        siif = siif.reindex(siif.index.union(missing_indices))
+        sgf = sgf.reindex(siif.index)
+        siif = siif.fillna(0)
+        sgf = sgf.fillna(0)
         df = siif.subtract(sgf)
         df = df.reset_index()
         df = df.fillna(0)
@@ -395,4 +410,5 @@ class ControlEscribanos(ImportDataFrame):
             numeric_cols = df.select_dtypes(include=np.number).columns
             # Filtrar el DataFrame utilizando las columnas numéricas válidas
             df = df[df[numeric_cols].sum(axis=1) != 0]
+            df = df.reset_index(drop=True)
         return df

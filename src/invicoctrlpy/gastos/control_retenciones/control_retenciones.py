@@ -296,6 +296,12 @@ class ControlRetenciones(ImportDataFrame):
             'auxiliar_1': 'cuit'
         })
         df = siif_contratistas.merge(siif_banco, how='left', on='nro_entrada')
+        map_to = self.ctas_ctes.loc[:,['map_to', 'siif_contabilidad_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='siif_contabilidad_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'siif_contabilidad_cta_cte'], axis='columns', inplace=True)
         return df
 
     # --------------------------------------------------
@@ -352,6 +358,12 @@ class ControlRetenciones(ImportDataFrame):
             ],
             ['iibb', 'sellos', 'lp', 'gcias', 'suss', 'invico']
         )
+        map_to = self.ctas_ctes.loc[:,['map_to', 'siif_contabilidad_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='siif_contabilidad_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'siif_contabilidad_cta_cte'], axis='columns', inplace=True)
         return df
 
     # --------------------------------------------------
@@ -434,6 +446,13 @@ class ControlRetenciones(ImportDataFrame):
         icaro = icaro.set_index(groupby_cols)
         siif = self.siif_summarize(groupby_cols=groupby_cols).copy()
         siif = siif.set_index(groupby_cols)
+        # Obtener los índices faltantes en icaro
+        missing_indices = siif.index.difference(siif.index)
+        # Reindexar el DataFrame icaro con los índices faltantes
+        icaro = icaro.reindex(icaro.index.union(missing_indices))
+        siif = siif.reindex(icaro.index)
+        icaro = icaro.fillna(0)
+        siif = siif.fillna(0)
         df = icaro.subtract(siif)
         df = df.reset_index()
         df = df.fillna(0)
@@ -445,6 +464,7 @@ class ControlRetenciones(ImportDataFrame):
             numeric_cols = df.select_dtypes(include=np.number).columns
             # Filtrar el DataFrame utilizando las columnas numéricas válidas
             df = df[df[numeric_cols].sum(axis=1) != 0]
+            df = df.reset_index(drop=True)
         return df
 
     # --------------------------------------------------
@@ -583,6 +603,13 @@ class ControlRetenciones(ImportDataFrame):
         sgf = sgf.set_index(groupby_cols)
         sscc = self.sscc_summarize(groupby_cols=groupby_cols).copy()
         sscc = sscc.set_index(groupby_cols)
+        # Obtener los índices faltantes en sgf
+        missing_indices = sscc.index.difference(sscc.index)
+        # Reindexar el DataFrame sgf con los índices faltantes
+        sgf = sgf.reindex(sgf.index.union(missing_indices))
+        sscc = sscc.reindex(sgf.index)
+        sgf = sgf.fillna(0)
+        sscc = sscc.fillna(0)
         df = sgf.subtract(sscc)
         df = df.reset_index()
         df = df.fillna(0)
@@ -594,10 +621,11 @@ class ControlRetenciones(ImportDataFrame):
             numeric_cols = df.select_dtypes(include=np.number).columns
             # Filtrar el DataFrame utilizando las columnas numéricas válidas
             df = df[df[numeric_cols].sum(axis=1) != 0]
+            df = df.reset_index(drop=True)
         return df
 
     # --------------------------------------------------
-    def icaro_vs_invico(
+    def icaro_vs_sgf(
         self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte'],
         only_diff = False
     ) -> pd.DataFrame:
@@ -631,6 +659,13 @@ class ControlRetenciones(ImportDataFrame):
         icaro = icaro.set_index(groupby_cols)
         invico = self.sgf_summarize(groupby_cols=groupby_cols).copy()
         invico = invico.set_index(groupby_cols)
+        # Obtener los índices faltantes en icaro
+        missing_indices = invico.index.difference(icaro.index)
+        # Reindexar el DataFrame icaro con los índices faltantes
+        icaro = icaro.reindex(icaro.index.union(missing_indices))
+        invico = invico.reindex(icaro.index)
+        icaro = icaro.fillna(0)
+        invico = invico.fillna(0)
         df = icaro.subtract(invico)
         df = df.reset_index()
         df = df.fillna(0)
@@ -642,6 +677,7 @@ class ControlRetenciones(ImportDataFrame):
             numeric_cols = df.select_dtypes(include=np.number).columns
             # Filtrar el DataFrame utilizando las columnas numéricas válidas
             df = df[df[numeric_cols].sum(axis=1) != 0]
+            df = df.reset_index(drop=True)
         return df
 
     # --------------------------------------------------
@@ -682,6 +718,13 @@ class ControlRetenciones(ImportDataFrame):
         icaro = icaro.set_index(groupby_cols)
         sscc = self.sscc_summarize(groupby_cols=groupby_cols).copy()
         sscc = sscc.set_index(groupby_cols)
+        # Obtener los índices faltantes en icaro
+        missing_indices = sscc.index.difference(icaro.index)
+        # Reindexar el DataFrame icaro con los índices faltantes
+        icaro = icaro.reindex(icaro.index.union(missing_indices))
+        sscc = sscc.reindex(icaro.index)
+        icaro = icaro.fillna(0)
+        sscc = sscc.fillna(0)
         df = icaro.subtract(sscc)
         df = df.reset_index()
         df = df.fillna(0)
@@ -693,4 +736,5 @@ class ControlRetenciones(ImportDataFrame):
             numeric_cols = df.select_dtypes(include=np.number).columns
             # Filtrar el DataFrame utilizando las columnas numéricas válidas
             df = df[df[numeric_cols].sum(axis=1) != 0]
+            df = df.reset_index(drop=True)
         return df

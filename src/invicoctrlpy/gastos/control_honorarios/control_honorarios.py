@@ -197,6 +197,8 @@ class ControlHonorarios(ImportDataFrame):
         slave['otras'] = slave['otras'] + slave['anticipo'] + slave['descuento'] + slave['embargo'] + slave['mutual']
         slave['sellos'] = slave['sellos'] + slave['lp'] 
         slave = slave.drop(columns=['anticipo', 'descuento', 'embargo', 'lp', 'mutual'])
+        slave['retenciones'] = slave['iibb'] + slave['sellos'] + slave['seguro'] + slave['otras']
+        slave['importe_neto'] = slave['importe_bruto'] - slave['retenciones']
         if only_importe_bruto:
             slave = slave.loc[:, groupby_cols + ['importe_bruto']]
         slave = slave.groupby(groupby_cols).sum(numeric_only=True)
@@ -430,10 +432,16 @@ class ControlHonorarios(ImportDataFrame):
             groupby_cols = groupby_cols, only_importe_bruto=only_importe_bruto
         ).copy()
         slave = slave.set_index(groupby_cols)
-        sgf = sgf.set_index(groupby_cols)
+        sgf = sgf.set_index(groupby_cols)   
+        # Obtener los índices faltantes en slave
+        missing_indices = sgf.index.difference(slave.index)
+        # Reindexar el DataFrame slave con los índices faltantes
+        slave = slave.reindex(slave.index.union(missing_indices))
+        sgf = sgf.reindex(slave.index)
+        slave = slave.fillna(0)
+        sgf = sgf.fillna(0)
         df = slave.subtract(sgf)
         df = df.reset_index()
-        df = df.fillna(0)
         #Reindexamos el DataFrame
         slave = slave.reset_index()
         df = df.reindex(columns=slave.columns)
@@ -443,4 +451,5 @@ class ControlHonorarios(ImportDataFrame):
             # Filtrar el DataFrame utilizando las columnas numéricas válidas
             # df = df[df[numeric_cols].sum(axis=1) != 0]
             df = df[~np.isclose(df[numeric_cols].sum(axis=1), 0)]
+            df = df.reset_index(drop=True)
         return df
