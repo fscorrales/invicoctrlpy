@@ -79,15 +79,13 @@ class IcaroVsSIIF(ImportDataFrame):
     def import_siif_rf602(self):
         df = super().import_siif_rf602(self.ejercicio)
         df = df[df['partida'].isin(['421', '422'])]
-        self.siif_rf602 = df
-        return self.siif_rf602
+        return df
 
     # --------------------------------------------------
     def import_siif_comprobantes(self):
         df = super().import_siif_comprobantes(self.ejercicio)
         df = df[df['partida'].isin(['421', '422'])]
-        self.siif_comprobantes = df
-        return self.siif_comprobantes
+        return df
 
     # --------------------------------------------------
     def control_ejecucion_anual(self):
@@ -98,7 +96,7 @@ class IcaroVsSIIF(ImportDataFrame):
         icaro = icaro.groupby(group_by)['importe'].sum()
         icaro = icaro.reset_index(drop=False)
         icaro = icaro.rename(columns={'importe':'ejecucion_icaro'})
-        siif = self.siif_rf602.copy()
+        siif = self.import_siif_rf602().copy()
         siif = siif.loc[:, group_by + ['ordenado']]
         siif = siif.rename(columns={'ordenado':'ejecucion_siif'})
         df = pd.merge(icaro, siif, how='outer', on = group_by, copy=False)
@@ -115,7 +113,7 @@ class IcaroVsSIIF(ImportDataFrame):
             'ejercicio', 'nro_comprobante', 'fuente', 'importe',
             'mes', 'cta_cte', 'cuit', 'partida'
         ]
-        siif = self.siif_comprobantes.copy()
+        siif = self.import_siif_comprobantes().copy()
         # En ICARO limito los REG para regularizaciones de PA6
         siif.loc[(siif.clase_reg == 'REG') & (siif.nro_fondo.isnull()), 'clase_reg'] = 'CYO'
         siif = siif.loc[:, select + ['clase_reg']]
@@ -155,7 +153,7 @@ class IcaroVsSIIF(ImportDataFrame):
         df['siif_importe'] = df['siif_importe'].fillna(0)
         df['icaro_importe'] = df['icaro_importe'].fillna(0)
         df['err_importe'] = (df.siif_importe - df.icaro_importe).abs()
-        df['err_importe'] = (df['err_importe'] > 0.01)
+        df['err_importe'] = (df['err_importe'] > 0.1)
         df['err_cta_cte'] = df.siif_cta_cte != df.icaro_cta_cte
         df['err_cuit'] = df.siif_cuit != df.icaro_cuit
         df = df.loc[(
@@ -199,7 +197,7 @@ class IcaroVsSIIF(ImportDataFrame):
             'mes', 'cta_cte', 'cuit'
         ]
 
-        siif_gtos = self.siif_comprobantes.copy()
+        siif_gtos = self.import_siif_comprobantes().copy()
         siif_gtos = siif_gtos.loc[siif_gtos['clase_reg'] == 'REG']
         siif_gtos = siif_gtos.loc[:, select + ['nro_fondo', 'clase_reg']]
         siif_gtos['nro_fondo'] = siif_gtos['nro_fondo'].str.zfill(5) + '/' + siif_gtos.ejercicio.str[-2:]
@@ -300,43 +298,3 @@ class IcaroVsSIIF(ImportDataFrame):
             ascending=False
         )
         return df
-
-# --------------------------------------------------
-def get_args():
-    """Get needed params from user input"""
-    parser = argparse.ArgumentParser(
-        description = "Icaro vs SIIF budget execution",
-        formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-
-    parser.add_argument(
-        '-e', '--ejercicio', 
-        metavar = "ejercicio",
-        default= str(dt.datetime.now().year),
-        type=str,
-        help = "Ejercicio a filtrar")
-
-    parser.add_argument(
-        '-p', '--path', 
-        metavar = "db_path",
-        default= None,
-        type=str,
-        help = "Path to sqlite folder from where to import database")
-
-    return parser.parse_args()
-
-# --------------------------------------------------
-def main():
-    """Let's try it"""
-    args = get_args()
-    control = IcaroVsSIIF(
-        ejercicio = args.ejercicio,
-        db_path = args.path,
-        update_db= True)
-    # df = control.control_pa6()
-    # print(df.head(5))
-
-# --------------------------------------------------
-if __name__ == '__main__':
-    main()
-    # From invicoctrlpy/src/invicoctrlpy/icaro
-    # python icaro_vs_siif.py -e 2021
