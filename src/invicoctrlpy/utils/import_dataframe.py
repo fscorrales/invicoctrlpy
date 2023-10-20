@@ -751,16 +751,20 @@ class ImportDataFrame(HanglingPath):
             banco = banco.loc[banco['cta_cte'] == '130832-05']
             banco = banco.loc[banco['cod_imputacion'] == '049']
             banco['importe_bruto'] = banco['importe'] * (-1)
-            banco['importe_neto'] = banco['importe_bruto']
+            banco['importe_neto'] = 0
+            banco['otras'] = banco['importe_bruto']
+            banco['retenciones'] = banco['importe_bruto']
             banco['destino'] = 'EMBARGO POR ALIMENTOS'
+            banco['beneficiario'] = 'EMBARGO POR ALIMENTOS'
             banco.rename(columns={
                 "libramiento":"libramiento_sgf",
                 }, inplace=True)
             banco = banco.loc[:, [
                 'ejercicio', 'mes', 'fecha', 'beneficiario',
                 'destino', 'cta_cte', 'libramiento_sgf', 'movimiento',
-                'importe_bruto', 'importe_neto']]
+                'importe_bruto', 'otras', 'retenciones','importe_neto']]
             df = pd.concat([df, banco])
+            df = df.fillna(0)
         self.sgf_resumen_rend_honorarios = pd.DataFrame(df)
         return self.sgf_resumen_rend_honorarios
 
