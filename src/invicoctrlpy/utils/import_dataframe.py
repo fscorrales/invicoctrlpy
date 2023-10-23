@@ -432,13 +432,12 @@ class ImportDataFrame(HanglingPath):
             ).copy()
             gcias_310 = gcias_310[gcias_310['tipo_comprobante'] != 'APE']
             gcias_310 = gcias_310[gcias_310['auxiliar_1'].isin(['245', '310'])]
-            gcias_310['nro_comprobante'] = gcias_310['nro_entrada'].str.zfill(5) + '/' + gcias_310['ejercicio'].str[-2:]
+            gcias_310['nro_comprobante'] = gcias_310['nro_entrada'].str.zfill(5) + '/' + gcias_310['ejercicio'].str[-2:] + 'A'
             gcias_310['importe'] = gcias_310['creditos'] * (-1)
             gcias_310['grupo'] = '100'
             gcias_310['partida'] = gcias_310['auxiliar_1']
             gcias_310['nro_origen'] = gcias_310['nro_entrada']
             gcias_310['nro_expte'] = '90000000' + gcias_310['ejercicio']
-            
             gcias_310['glosa'] = np.where(gcias_310['auxiliar_1'] == '245', 
                                 'RET. GCIAS. 4TA CATEGORÍA', 'HABERES ERRONEOS COD 310')
             gcias_310['beneficiario'] = 'INSTITUTO DE VIVIENDA DE CORRIENTES'
