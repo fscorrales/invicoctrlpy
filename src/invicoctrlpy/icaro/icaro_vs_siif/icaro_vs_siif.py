@@ -259,14 +259,14 @@ class IcaroVsSIIF(ImportDataFrame):
         df['siif_importe_pa6'] = df['siif_importe_pa6'].fillna(0)
         df['icaro_importe_pa6'] = df['icaro_importe_pa6'].fillna(0)
         df['err_importe_pa6'] = (df.siif_importe_pa6 - df.icaro_importe_pa6).abs()
-        df['err_importe_pa6'] = (df['err_importe_pa6'] > 0.01)
+        df['err_importe_pa6'] = (df['err_importe_pa6'] > 0.1)
         # df['err_importe_pa6'] = ~np.isclose((df.siif_importe_pa6 - df.icaro_importe_pa6), 0)
         df['err_nro_reg'] = df.siif_nro_reg != df.icaro_nro_reg
         df['err_mes_reg'] = df.siif_mes_reg != df.icaro_mes_reg
         df['siif_importe_reg'] = df['siif_importe_reg'].fillna(0)
         df['icaro_importe_reg'] = df['icaro_importe_reg'].fillna(0)
         df['err_importe_reg'] = (df.siif_importe_reg - df.icaro_importe_reg).abs()
-        df['err_importe_reg'] = (df['err_importe_reg'] > 0.01)        
+        df['err_importe_reg'] = (df['err_importe_reg'] > 0.1)        
         #df['err_importe_reg'] = ~np.isclose((df.siif_importe_reg - df.icaro_importe_reg), 0)
         df['err_tipo'] = df.siif_tipo != df.icaro_tipo
         df['err_fuente'] = df.siif_fuente != df.icaro_fuente
