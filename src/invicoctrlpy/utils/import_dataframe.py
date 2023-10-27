@@ -690,16 +690,19 @@ class ImportDataFrame(HanglingPath):
             'mes', 'fecha', 'beneficiario', 
             'libramiento_sgf', 'importe_bruto'
         ])
-        # df_106 = df_106 >> \
-        #     dplyr.filter_(f.cta_cte == '106') >> \
-        #     dplyr.distinct(
-        #         f.mes, f.fecha, f.beneficiario,
-        #         f.libramiento_sgf, f.importe_bruto,
-        #         _keep_all=True
-        #     )
         df = df >> \
             dplyr.filter_(f.cta_cte != '106') >> \
             dplyr.bind_rows(df_106)
+        #Filtramos los registros duplicados en la 106
+        df_2210178150 = df.copy()
+        df_2210178150 = df_2210178150.loc[df_2210178150['cta_cte'] == '2210178150']
+        df_2210178150 = df_2210178150.drop_duplicates(subset=[
+            'mes', 'fecha', 'beneficiario', 
+            'libramiento_sgf', 'importe_bruto'
+        ])
+        df = df >> \
+            dplyr.filter_(f.cta_cte != '2210178150') >> \
+            dplyr.bind_rows(df_2210178150)
         if neto_cert_neg:
             self.import_banco_invico(ejercicio=ejercicio)
             banco_invico = self.sscc_banco_invico.copy()
