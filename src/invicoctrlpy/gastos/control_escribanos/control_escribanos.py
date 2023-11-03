@@ -247,6 +247,8 @@ class ControlEscribanos(ImportDataFrame):
             'gcias', 'iibb', 'sellos', 'suss', 'invico', 'retenciones'], 
             axis=1
         )
+        # Rellena los valores nulos solo en la columna específica
+        df['cuit'] = df['cuit'].fillna(0)
         df = df.groupby(groupby_cols).sum(numeric_only=True)
         df = df.reset_index()
         return df
