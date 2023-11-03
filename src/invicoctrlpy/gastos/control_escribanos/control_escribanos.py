@@ -161,7 +161,7 @@ class ControlEscribanos(ImportDataFrame):
             'creditos': 'carga_fei',
             'debitos':'pagos_fei'
         })
-        siif['dif_carga_pagos'] = siif['carga_fei'] - siif['pagos_fei']
+        siif['fei_impagos'] = siif['carga_fei'] - siif['pagos_fei']
         df = siif
         return df
 
@@ -391,6 +391,7 @@ class ControlEscribanos(ImportDataFrame):
         siif = self.siif_summarize(groupby_cols=groupby_cols).copy()
         siif = siif.set_index(groupby_cols)
         sgf = self.sgf_summarize(groupby_cols=groupby_cols).copy()
+        sgf = sgf.rename(columns={'importe_neto': 'pagos_sgf'})
         sgf = sgf.set_index(groupby_cols)
         # Obtener los índices faltantes en siif
         missing_indices = sgf.index.difference(siif.index)
@@ -399,12 +400,12 @@ class ControlEscribanos(ImportDataFrame):
         sgf = sgf.reindex(siif.index)
         siif = siif.fillna(0)
         sgf = sgf.fillna(0)
-        df = siif.subtract(sgf)
+        df = siif.merge(sgf, how='outer', on=groupby_cols)
         df = df.reset_index()
         df = df.fillna(0)
         #Reindexamos el DataFrame
-        siif = siif.reset_index()
-        df = df.reindex(columns=siif.columns)
+        # siif = siif.reset_index()
+        # df = df.reindex(columns=siif.columns)
         if only_diff:
             # Seleccionar solo las columnas numéricas
             numeric_cols = df.select_dtypes(include=np.number).columns
