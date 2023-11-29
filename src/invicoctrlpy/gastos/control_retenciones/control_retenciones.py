@@ -278,7 +278,7 @@ class ControlRetenciones(ImportDataFrame):
         siif_banco = self.import_siif_rcocc31(
             ejercicio = self.ejercicio, cta_contable = '1112-2-6'
         )
-        siif_banco = siif_banco.loc[:, ['nro_entrada', 'auxiliar_1']]
+        siif_banco = siif_banco.loc[:, ['ejercicio', 'nro_entrada', 'auxiliar_1']]
         siif_banco = siif_banco.rename(columns={
             'auxiliar_1': 'cta_cte'
         })
@@ -295,7 +295,7 @@ class ControlRetenciones(ImportDataFrame):
             'debitos': 'importe_neto',
             'auxiliar_1': 'cuit'
         })
-        df = siif_contratistas.merge(siif_banco, how='left', on='nro_entrada')
+        df = siif_contratistas.merge(siif_banco, how='left', on=['ejercicio', 'nro_entrada'])
         map_to = self.ctas_ctes.loc[:,['map_to', 'siif_contabilidad_cta_cte']]
         df = pd.merge(
             df, map_to, how='left',
