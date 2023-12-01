@@ -99,9 +99,9 @@ class IcaroVsSIIF(ImportDataFrame):
         siif = self.import_siif_rf602().copy()
         siif = siif.loc[:, group_by + ['ordenado']]
         siif = siif.rename(columns={'ordenado':'ejecucion_siif'})
-        df = pd.merge(icaro, siif, how='outer', on = group_by, copy=False)
-        df['diferencia'] = df['ejecucion_siif'] - df['ejecucion_icaro']
+        df = pd.merge(siif, icaro, how='outer', on = group_by, copy=False)
         df = df.fillna(0)
+        df['diferencia'] = df['ejecucion_siif'] - df['ejecucion_icaro']
         df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
         df = df.loc[(df['diferencia'] < -0.1) | (df['diferencia'] > 0.1)]
         df = df.reset_index(drop=True)
