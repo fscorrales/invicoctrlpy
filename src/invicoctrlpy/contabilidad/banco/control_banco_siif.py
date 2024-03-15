@@ -4,8 +4,10 @@ Author: Fernando Corrales <fscpython@gmail.com>
 Purpose: Control de Banco SIIF vs Real INVICO (SSCC)
 Data required:
     - SSCC Resumen General de Movimientos
+    - SSCC Saldo Final
     - SSCC ctas_ctes (manual data)
     - SIIF rcocc31 (1112-2-6 Banco)
+    - SIIF rfondo07tp (PA6)
 Packages:
  - invicodatpy (pip install '/home/kanou/IT/R Apps/R Gestion INVICO/invicodatpy')
  - invicoctrlpy (pip install -e '/home/kanou/IT/R Apps/R Gestion INVICO/invicoctrlpy')
@@ -19,6 +21,12 @@ from typing import List
 import pandas as pd
 import numpy as np
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
+from invicoctrlpy.recursos.control_recursos.control_recursos import ControlRecursos
+from invicoctrlpy.gastos.control_obras.control_obras import ControlObras
+from invicoctrlpy.gastos.control_haberes.control_haberes import ControlHaberes
+from invicoctrlpy.gastos.control_honorarios.control_honorarios import ControlHonorarios
+from invicoctrlpy.gastos.control_debitos_bancarios.control_debitos_bancarios import ControlDebitosBancarios
+from invicoctrlpy.gastos.control_escribanos.control_escribanos import ControlEscribanos
 from invicodb.update import update_db
 
 
@@ -61,6 +69,12 @@ class ControlBanco(ImportDataFrame):
     db_path:str = None
     update_db:bool = False
     icaro_carga:pd.DataFrame = field(init=False, repr=False)
+    control_recursos:ControlRecursos = field(init=False, repr=False)
+    control_obras:ControlObras = field(init=False, repr=False)
+    control_haberes:ControlHaberes = field(init=False, repr=False)
+    control_honorarios:ControlHonorarios = field(init=False, repr=False)
+    control_debitos_bancarios:ControlDebitosBancarios = field(init=False, repr=False)
+    control_escribanos:ControlEscribanos = field(init=False, repr=False)
 
     # --------------------------------------------------
     def __post_init__(self):
@@ -104,11 +118,13 @@ class ControlBanco(ImportDataFrame):
             update_path_input + '/Reportes SIIF', 
             self.db_path + '/siif.sqlite')
         update_siif.update_mayor_contable_rcocc31()
+        update_siif.update_resumen_fdos_rfondo07tp()
 
         update_sscc = update_db.UpdateSSCC(
             update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
             self.db_path + '/sscc.sqlite')
         update_sscc.update_ctas_ctes()
+        update_sscc.update_sdo_final_banco_invico()
         update_sscc.update_banco_invico()
 
     # --------------------------------------------------
@@ -123,10 +139,16 @@ class ControlBanco(ImportDataFrame):
         Returns:
             None
         """
+        self.control_recursos = ControlRecursos(ejercicio=self.ejercicio, update_db=self.update_db)
+        self.control_obras = ControlObras(ejercicio=self.ejercicio, update_db=self.update_db)
+        self.control_haberes = ControlHaberes(ejercicio=self.ejercicio, update_db=self.update_db)
+        self.control_honorarios = ControlHonorarios(ejercicio=self.ejercicio, update_db=self.update_db)
+        self.control_debitos_bancarios = ControlDebitosBancarios(ejercicio=self.ejercicio, update_db=self.update_db)
+        self.control_escribanos = ControlEscribanos(ejercicio=self.ejercicio, update_db=self.update_db)
         self.import_ctas_ctes()
 
     # --------------------------------------------------
-    def import_banco_siif(self) -> pd.DataFrame:
+    def banco_siif(self) -> pd.DataFrame:
  
         siif_banco = self.import_siif_rcocc31(
             ejercicio = self.ejercicio, cta_contable = '1112-2-6'
@@ -148,7 +170,7 @@ class ControlBanco(ImportDataFrame):
         self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte']
     ) -> pd.DataFrame:
 
-        banco_siif = self.import_banco_siif().copy()
+        banco_siif = self.banco_siif().copy()
         banco_siif = banco_siif.groupby(groupby_cols).sum(numeric_only=True)
         banco_siif = banco_siif.reset_index()
         df = banco_siif
@@ -156,77 +178,47 @@ class ControlBanco(ImportDataFrame):
         return df
 
     # --------------------------------------------------
-    def icaro_vs_siif(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte'],
-        only_diff = False
-    ) -> pd.DataFrame:
-        """
-        Compare 'icaro' data with 'siif' data.
-
-        This method performs a comparison between summarized 'icaro' data and summarized
-        'siif' (Sistema de Información Integrado de Finanzas) data based on the specified
-        grouping columns. It calculates the differences between the two datasets and can
-        optionally filter and return only rows with differences.
-
-        Args:
-            groupby_cols (List[str], optional): A list of column names to group and
-                perform the comparison on. Default is ['ejercicio', 'mes', 'cta_cte'].
-            only_diff (bool, optional): Flag indicating whether to return only rows with
-                differences. Default is False.
-
-        Returns:
-            pd.DataFrame: A Pandas DataFrame containing the comparison results between
-            'icaro' and 'siif' data.
-
-        Example:
-            To compare 'icaro' and 'siif' data based on custom grouping columns and
-            return only rows with differences:
-
-            ```python
-            diff_data = control.icaro_vs_siif(groupby_cols=['ejercicio', 'mes'], only_diff=True)
-            ```
-        """
-        icaro = self.icaro_summarize(groupby_cols=groupby_cols).copy()
-        icaro = icaro.set_index(groupby_cols)
-        siif = self.banco_siif_summarize(groupby_cols=groupby_cols).copy()
-        siif = siif.set_index(groupby_cols)
-        # Obtener los índices faltantes en icaro
-        missing_indices = siif.index.difference(siif.index)
-        # Reindexar el DataFrame icaro con los índices faltantes
-        icaro = icaro.reindex(icaro.index.union(missing_indices))
-        siif = siif.reindex(icaro.index)
-        icaro = icaro.fillna(0)
-        siif = siif.fillna(0)
-        df = icaro.subtract(siif)
-        df = df.reset_index()
-        df = df.fillna(0)
-        #Reindexamos el DataFrame
-        icaro = icaro.reset_index()
-        df = df.reindex(columns=icaro.columns)
-        if only_diff:
-            # Seleccionar solo las columnas numéricas
-            numeric_cols = df.select_dtypes(include=np.number).columns
-            # Filtrar el DataFrame utilizando las columnas numéricas válidas
-            df = df[df[numeric_cols].sum(axis=1) != 0]
-            df = df.reset_index(drop=True)
+    def pa6_siif(self) -> pd.DataFrame:
+        df = self.import_siif_rfondo07tp_pa6(self.ejercicio)
         return df
 
     # --------------------------------------------------
-    def import_resumen_rend_cuit(self) -> pd.DataFrame:
-        """
-        Imports SGF's summary data related to with cuit for the specified fiscal year.
-
-        Args:
-            None
-
-        Returns:
-            pd.DataFrame: Pandas DataFrame containing summary data for rend cuit.
-        """
-        return super().import_resumen_rend_cuit(
-            ejercicio = self.ejercicio, neto_cert_neg=False)
+    def control_recursos_siif(self) -> pd.DataFrame:
+        df = self.control_recursos.control_mes_grupo()
+        return df
 
     # --------------------------------------------------
-    def import_banco_invico(self) -> pd.DataFrame:
+    def control_obras_siif(self) -> pd.DataFrame:
+        df = self.control_obras.control_cruzado()
+        return df
+
+    # --------------------------------------------------
+    def control_haberes_siif(self) -> pd.DataFrame:
+        df = self.control_haberes.control_cruzado()
+        return df
+
+    # --------------------------------------------------
+    def control_honorarios_siif(self) -> pd.DataFrame:
+        df = self.control_honorarios.slave_vs_sgf(only_diff=True)
+        return df
+
+    # --------------------------------------------------
+    def control_debitos_bancarios_siif(self) -> pd.DataFrame:
+        df = self.control_debitos_bancarios.siif_vs_sscc()
+        return df
+
+    # --------------------------------------------------
+    def control_escribanos_siif(self) -> pd.DataFrame:
+        df = self.control_escribanos.siif_vs_sgf()
+        return df
+
+    # --------------------------------------------------
+    def banco_invico_saldo_final(self) -> pd.DataFrame:
+        df = self.import_sdo_final_banco_invico(ejercicio = self.ejercicio)
+        return df
+
+    # --------------------------------------------------
+    def banco_invico(self) -> pd.DataFrame:
         """
         Imports Banco Invico data for he specified fiscal year.
 
@@ -236,223 +228,166 @@ class ControlBanco(ImportDataFrame):
         Returns:
             pd.DataFrame: Pandas DataFrame containing Banco Invico data.
         """
-        return super().import_banco_invico()
+        return super().import_banco_invico(ejercicio=self.ejercicio)
 
     # --------------------------------------------------
-    def sscc_summarize(
+    def banco_invico_saldo_acum(
         self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte']
     ) -> pd.DataFrame:
-        """
-        Perform cross-control of Banco INVICO's data.
+        df = super().import_banco_invico(ejercicio=None)
+        df = df.loc[df['ejercicio'].astype(int) <= int(self.ejercicio[-1])]
+        df = df.sort_values(by=['fecha'], ascending=True)
+        df['saldo'] = df.groupby('cta_cte')['importe'].cumsum()
+        df = df.loc[:,groupby_cols + ['saldo']]
+        df = df.fillna(0)
+        df = df.groupby(groupby_cols).last().reset_index()
 
-        Performs cross-control of the imported data by grouping it based on
-        the specified columns and summing the values within each group.
+        # df = df.drop('importe', axis=1)
+        # if isinstance(self.ejercicio, list):
+        #     df = df.loc[df['ejercicio'].isin(self.ejercicio)]
+        # else:
+        #     df = df.loc[df['ejercicio'].isin([self.ejercicio])]
+        # df = df.reset_index(drop=True)
+        return df
 
-        Args:
-            groupby_cols (list): List of column names to group by.
+    # --------------------------------------------------
+    def banco_invico_sldo_final_vs_acum(
+        self, groupby_cols:List[str] = ['ejercicio', 'cta_cte'],
+        only_diff = False
+    ) -> pd.DataFrame:
+        sldo_final = self.banco_invico_saldo_final().copy()
+        sldo_final = sldo_final.rename(columns={
+            'saldo': 'sldo_final'
+        })
+        sldo_final = sldo_final.set_index(groupby_cols)
+        sldo_acum = self.banco_invico_saldo_acum(groupby_cols=groupby_cols).copy()
+        sldo_acum = sldo_acum.rename(columns={
+            'saldo': 'sldo_acum'
+        })
+        sldo_acum = sldo_acum.set_index(groupby_cols)
+        # Obtener los índices faltantes en icaro
+        missing_indices = sldo_acum.index.difference(sldo_final.index)
+        # Reindexar el DataFrame icaro con los índices faltantes
+        sldo_final = sldo_final.reindex(sldo_final.index.union(missing_indices))
+        sldo_acum = sldo_acum.reindex(sldo_final.index)
+        sldo_final = sldo_final.fillna(0)
+        sldo_acum = sldo_acum.fillna(0)
+        df = pd.merge(sldo_final, sldo_acum, how='inner', on=groupby_cols)
+        # df = sldo_final.subtract(sldo_acum)
+        df = df.reset_index()
+        df = df.fillna(0)
+        df['dif'] = df['sldo_final'] - df['sldo_acum']
+        #Reindexamos el DataFrame
+        if only_diff:
+            # Seleccionar solo las columnas numéricas
+            numeric_cols = df.select_dtypes(include=np.number).columns
+            # Filtrar el DataFrame utilizando las columnas numéricas válidas
+            df = df[df[numeric_cols].sum(axis=1) != 0]
+            df = df.reset_index(drop=True)
+        return df
 
-        Returns:
-            pd.DataFrame: Pandas DataFrame containing the cross-controlled data.
-        """
-        df = self.import_banco_invico().copy()
-        inversion_obras = [
-            '018', '019', '020', '021', '027', '035', '041',
-            '052', '053', '065', '066', '072', '112', '142'
-            '143', '162', '210', '213', '217', '219', '221',
-            '225', '227','034'
-        ]
-        df = df.loc[
-            df['cod_imputacion'].isin(inversion_obras)
-        ]
-        df['retenciones'] = df.loc[df['cod_imputacion'] == '034']['importe'] * -1
-        # Filtrar los registros que cumplan ambas condiciones
-        # ['iibb', 'sellos', 'lp', 'gcias', 'suss', 'invico']
-        df.loc[(df['concepto'].str.contains('IIBB')) & (df['cod_imputacion'] == '034'), 'iibb'] = df['retenciones']
-        df.loc[(df['concepto'].str.contains('SELLOS')) & (df['cod_imputacion'] == '034'), 'sellos'] = df['retenciones']
-        df.loc[(df['concepto'].str.contains('GCI')) & (df['cod_imputacion'] == '034'), 'gcias'] = df['retenciones']
-        df.loc[(df['concepto'].str.contains('SUSS')) & (df['cod_imputacion'] == '034'), 'suss'] = df['retenciones']
-        df.loc[(df['concepto'].str.contains('INV')) & (df['cod_imputacion'] == '034'), 'invico'] = df['retenciones']
-        #df['otra_ret'] = df['retenciones'] - df['iibb'] - df['sellos'] - df['gcias'] - df['suss'] - df['invico']
-        df['importe'] = df.loc[df['cod_imputacion'] != '034']['importe']
-        df = df.drop(
-            ['fecha', 'es_cheque','beneficiario', 'concepto', 'moneda',
-            'libramiento', 'cod_imputacion', 'imputacion'], 
-            axis=1
+    # --------------------------------------------------
+    def banco_siif_vs_invico_sldo_final(
+        self, groupby_cols:List[str] = ['ejercicio', 'cta_cte'],
+        only_diff = False
+    ) -> pd.DataFrame:
+        banco_invico = self.banco_invico_saldo_final().copy()
+        banco_invico = banco_invico.loc[:, groupby_cols + ['saldo']]
+        banco_invico = banco_invico.rename(columns={
+            'saldo': 'sldo_invico'
+        })
+        banco_invico = banco_invico.set_index(groupby_cols)
+        banco_siif = self.banco_siif_summarize(groupby_cols=groupby_cols).copy()
+        banco_siif = banco_siif.rename(columns={
+            'saldo': 'sldo_siif'
+        })
+        banco_siif = banco_siif.set_index(groupby_cols)
+        # Obtener los índices faltantes en icaro
+        missing_indices = banco_siif.index.difference(banco_invico.index)
+        # Reindexar el DataFrame icaro con los índices faltantes
+        banco_invico = banco_invico.reindex(banco_invico.index.union(missing_indices))
+        banco_siif = banco_siif.reindex(banco_invico.index)
+        banco_invico = banco_invico.fillna(0)
+        banco_siif = banco_siif.fillna(0)
+        df = pd.merge(banco_siif, banco_invico, how='inner', on=groupby_cols)
+        # df = sldo_final.subtract(sldo_acum)
+        df = df.reset_index()
+        df = df.fillna(0)
+        df['dif_sldo'] = df['sldo_siif'] - df['sldo_invico']
+        #Reindexamos el DataFrame
+        if only_diff:
+            # Seleccionar solo las columnas numéricas
+            numeric_cols = df.select_dtypes(include=np.number).columns
+            # Filtrar el DataFrame utilizando las columnas numéricas válidas
+            df = df[df[numeric_cols].sum(axis=1) != 0]
+            df = df.reset_index(drop=True)
+        return df
+
+    # --------------------------------------------------
+    def banco_siif_vs_invico_ajustes(
+        self, incluir_pa6 = True, incluir_honorarios = True, incluir_escribanos = True
+    ) -> pd.DataFrame:
+        df = self.banco_siif_vs_invico_sldo_final().copy()
+        df = df.loc[:, ['ejercicio','sldo_siif', 'sldo_invico', 'dif_sldo']]
+        df = df.groupby(['ejercicio']).sum()
+        df = df.reset_index()
+        recursos = self.control_recursos_siif().copy()
+        recursos = recursos.loc[:, ['ejercicio', 'diferencia']]
+        recursos = recursos.groupby(['ejercicio']).sum(numeric_only=True)
+        recursos['diferencia'] = recursos['diferencia'] * -1
+        recursos = recursos.rename(columns={'diferencia':'recursos_dif'})
+        obras = self.control_obras_siif().copy()
+        obras = obras.loc[:, ['ejercicio', 'diferencia']]
+        obras = obras.groupby(['ejercicio']).sum(numeric_only=True)
+        obras = obras.rename(columns={'diferencia':'obras_dif'})
+        haberes = self.control_haberes_siif().copy()
+        haberes = haberes.loc[:, ['ejercicio', 'diferencia']]
+        haberes = haberes.groupby(['ejercicio']).sum(numeric_only=True)
+        haberes = haberes.rename(columns={'diferencia':'haberes_dif'})
+        debitos_bancarios = self.control_debitos_bancarios_siif().copy()
+        debitos_bancarios = debitos_bancarios.loc[:, ['ejercicio', 'diferencia']]
+        debitos_bancarios = debitos_bancarios.groupby(['ejercicio']).sum(numeric_only=True)
+        debitos_bancarios = debitos_bancarios.rename(columns={'diferencia':'debitos_banca_dif'})
+
+        # Merge
+        df = df.merge(recursos, how='left', on='ejercicio', copy=False)
+        df = df.merge(obras, how='left', on='ejercicio', copy=False)
+        df = df.merge(haberes, how='left', on='ejercicio', copy=False)
+        df = df.merge(debitos_bancarios, how='left', on='ejercicio', copy=False)
+        if incluir_pa6:
+            pa6 = self.pa6_siif().copy()
+            pa6 = pa6.loc[:, ['ejercicio', 'egresos']]
+            pa6 = pa6.groupby(['ejercicio']).sum(numeric_only=True)
+            pa6 = pa6.rename(columns={'egresos':'pa6_reg'})
+            df = df.merge(pa6, how='left', on='ejercicio', copy=False)
+
+        if incluir_honorarios:
+            honorarios = self.control_honorarios_siif().copy()
+            honorarios = honorarios.loc[:, ['ejercicio', 'importe_bruto']]
+            honorarios = honorarios.groupby(['ejercicio']).sum(numeric_only=True)
+            honorarios = honorarios.rename(columns={'importe_bruto':'honorarios_dif'})
+            df = df.merge(honorarios, how='left', on='ejercicio', copy=False)
+
+        if incluir_escribanos:
+            escribanos = self.control_escribanos_siif().copy()
+            escribanos = escribanos.loc[:, ['ejercicio', 'dif_pagos']]
+            escribanos = escribanos.groupby(['ejercicio']).sum(numeric_only=True)
+            escribanos = escribanos.rename(columns={'dif_pagos':'escribanos_dif'})
+            df = df.merge(escribanos, how='left', on='ejercicio', copy=False)
+
+        df['dif_sldo_ajustado'] = (
+            df['dif_sldo'] + df['recursos_dif'] + df['obras_dif'] + 
+            df['haberes_dif'] + df['debitos_banca_dif']
         )
-        df = df.fillna(0)
-        df = df.groupby(groupby_cols).sum(numeric_only=True)
-        df = df.reset_index()
-        df['importe'] = df['importe'] * -1
-        df = df.rename(columns={'importe':'importe_neto'})
-        df['importe_bruto'] = df['importe_neto'] + df['retenciones']
-        return df
+        if incluir_honorarios:
+            df['dif_sldo_ajustado'] = df['dif_sldo_ajustado'] + df['honorarios_dif']
+        if incluir_escribanos:
+            df['dif_sldo_ajustado'] = df['dif_sldo_ajustado'] + df['escribanos_dif']
+        if incluir_pa6:
+            df['dif_sldo_ajustado'] = df['dif_sldo_ajustado'] + df['pa6_reg']
 
-    # --------------------------------------------------
-    def sgf_vs_sscc(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte'],
-        only_diff = False
-    ) -> pd.DataFrame:
-        """
-        Perform a comparison between 'sgf' and 'sscc' data.
-
-        This method compares summarized 'sgf' (Sistema Gestion Financiera) data with
-        summarized 'sscc' (Sistema de Seguimiento de Cuentas Corrientes) data based on
-        the specified grouping columns. It calculates the differences in the 'importe'
-        columns between 'sgf' and 'sscc'.
-
-        Args:
-            groupby_cols (List[str], optional): A list of column names to group and
-                perform the comparison on. Default is ['ejercicio', 'mes', 'cta_cte'].
-            only_diff (bool, optional): Flag indicating whether to return only rows with
-                differences. Default is False.
-
-        Returns:
-            pd.DataFrame: A Pandas DataFrame containing the comparison results, including
-            the differences between 'sgf' and 'sscc' data.
-
-        Example:
-            To compare 'sgf' and 'sscc' data based on custom grouping columns:
-
-            ```python
-            result = control.sgf_vs_sscc(groupby_cols=['ejercicio', 'mes'])
-            ```
-        """
-        sgf =  self.sgf_summarize(groupby_cols=groupby_cols).copy()
-        sgf = sgf.set_index(groupby_cols)
-        sscc = self.sscc_summarize(groupby_cols=groupby_cols).copy()
-        sscc = sscc.set_index(groupby_cols)
-        # Obtener los índices faltantes en sgf
-        missing_indices = sscc.index.difference(sscc.index)
-        # Reindexar el DataFrame sgf con los índices faltantes
-        sgf = sgf.reindex(sgf.index.union(missing_indices))
-        sscc = sscc.reindex(sgf.index)
-        sgf = sgf.fillna(0)
-        sscc = sscc.fillna(0)
-        df = sgf.subtract(sscc)
-        df = df.reset_index()
-        df = df.fillna(0)
-        #Reindexamos el DataFrame
-        sgf = sgf.reset_index()
-        df = df.reindex(columns=sgf.columns)
-        if only_diff:
-            # Seleccionar solo las columnas numéricas
-            numeric_cols = df.select_dtypes(include=np.number).columns
-            # Filtrar el DataFrame utilizando las columnas numéricas válidas
-            df = df[df[numeric_cols].sum(axis=1) != 0]
-            df = df.reset_index(drop=True)
-        return df
-
-    # --------------------------------------------------
-    def icaro_vs_sgf(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte'],
-        only_diff = False
-    ) -> pd.DataFrame:
-        """
-        Perform cross-control analysis between 'icaro' and 'invico' data.
-
-        This method calculates the cross-control analysis between summarized 'icaro' data
-        and summarized 'invico' data based on the specified grouping columns. It subtracts
-        the values of 'invico' from 'icaro' to identify discrepancies.
-
-        Args:
-            groupby_cols (List[str], optional): A list of column names to group and
-                perform cross-control analysis on. Default is ['ejercicio', 'mes', 'cta_cte'].
-            only_diff (bool, optional): Flag indicating whether to return only rows with
-                differences. Default is False.
-
-        Returns:
-            pd.DataFrame: A Pandas DataFrame containing the results of the cross-control
-            analysis.
-
-        Example:
-            To perform a cross-control analysis based on custom grouping columns:
-
-            ```python
-            result = control.icaro_vs_invico(groupby_cols=['ejercicio', 'mes'])
-            ```
-        """
-        icaro = self.icaro_summarize(groupby_cols=groupby_cols).copy()
-        icaro['sellos'] = icaro['sellos'] + icaro['lp']
-        icaro = icaro.drop(columns=['lp'])
-        icaro = icaro.set_index(groupby_cols)
-        invico = self.sgf_summarize(groupby_cols=groupby_cols).copy()
-        invico = invico.set_index(groupby_cols)
-        # Obtener los índices faltantes en icaro
-        missing_indices = invico.index.difference(icaro.index)
-        # Reindexar el DataFrame icaro con los índices faltantes
-        icaro = icaro.reindex(icaro.index.union(missing_indices))
-        invico = invico.reindex(icaro.index)
-        icaro = icaro.fillna(0)
-        invico = invico.fillna(0)
-        df = icaro.subtract(invico)
-        df = df.reset_index()
-        df = df.fillna(0)
-        #Reindexamos el DataFrame
-        icaro = icaro.reset_index()
-        df = df.reindex(columns=icaro.columns)
-        if only_diff:
-            # Seleccionar solo las columnas numéricas
-            numeric_cols = df.select_dtypes(include=np.number).columns
-            # Filtrar el DataFrame utilizando las columnas numéricas válidas
-            df = df[df[numeric_cols].sum(axis=1) != 0]
-            df = df.reset_index(drop=True)
-        return df
-
-    # --------------------------------------------------
-    def icaro_vs_sscc(
-        self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte'],
-        only_diff = False
-    ) -> pd.DataFrame:
-        """
-        Compares data between the 'icaro' and 'sscc' summaries.
-
-        This method calculates the difference between the 'icaro' and 'sscc' summaries
-        based on the specified grouping columns. It optionally allows you to filter
-        and return only rows with differences.
-
-        Args:
-            groupby_cols (list, optional): A list of column names to group by.
-                Defaults to ['ejercicio', 'mes', 'cta_cte'].
-            only_diff (bool, optional): If True, returns only rows with differences.
-                Defaults to False.
-
-        Returns:
-            pd.DataFrame: A DataFrame containing the comparison results.
-
-        Notes:
-            - The 'sellos' and 'lp' columns in 'icaro' are combined into a single 'sellos' column.
-            - The resulting DataFrame is reindexed to match the 'icaro' DataFrame columns.
+        df = df.reset_index(drop=True)
+        # # Transformar el DataFrame
+        df = df.melt(id_vars='ejercicio', var_name='concepto', value_name='Importe')
         
-        Example:
-            To perform a cross-control analysis based on custom grouping columns:
-
-            ```python
-            result = control.icaro_vs_sscc(groupby_cols=['ejercicio', 'mes'])
-            ```
-        """
-        icaro = self.icaro_summarize(groupby_cols=groupby_cols).copy()
-        icaro['sellos'] = icaro['sellos'] + icaro['lp']
-        icaro = icaro.drop(columns=['lp'])
-        icaro = icaro.set_index(groupby_cols)
-        sscc = self.sscc_summarize(groupby_cols=groupby_cols).copy()
-        sscc = sscc.set_index(groupby_cols)
-        # Obtener los índices faltantes en icaro
-        missing_indices = sscc.index.difference(icaro.index)
-        # Reindexar el DataFrame icaro con los índices faltantes
-        icaro = icaro.reindex(icaro.index.union(missing_indices))
-        sscc = sscc.reindex(icaro.index)
-        icaro = icaro.fillna(0)
-        sscc = sscc.fillna(0)
-        df = icaro.subtract(sscc)
-        df = df.reset_index()
-        df = df.fillna(0)
-        #Reindexamos el DataFrame
-        icaro = icaro.reset_index()
-        df = df.reindex(columns=icaro.columns)
-        if only_diff:
-            # Seleccionar solo las columnas numéricas
-            numeric_cols = df.select_dtypes(include=np.number).columns
-            # Filtrar el DataFrame utilizando las columnas numéricas válidas
-            df = df[df[numeric_cols].sum(axis=1) != 0]
-            df = df.reset_index(drop=True)
         return df

@@ -8,9 +8,8 @@ from invicodatpy.icaro.migrate_icaro import MigrateIcaro
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
 from invicodatpy.sgv.all import (ResumenFacturado, ResumenRecaudado,
                                  SaldoBarrio, SaldoBarrioVariacion,
-                                 SaldoMotivo,
-                                 SaldoMotivoActualizacionSemestral,
-                                 SaldoMotivoEntregaViviendas,
+                                 SaldoMotivo, BarriosNuevos,
+                                 SaldoMotivoPorBarrio,
                                  SaldoRecuperosCobrarVariacion)
 from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   ComprobantesRecRci02, DeudaFlotanteRdeu012,
@@ -111,6 +110,13 @@ class ImportDataFrame(HanglingPath):
             df = df.loc[df['tipo'] != 'REG']
         self.icaro_carga = df
         return self.icaro_carga
+
+    # --------------------------------------------------
+    def import_icaro_obras(self, ejercicio:str = None, 
+                        neto_pa6:bool = False,
+                        neto_reg:bool = False) -> pd.DataFrame:
+        df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'obras')  
+        return self.df
 
     # --------------------------------------------------
     def import_icaro_carga_neto_rdeu(self, ejercicio:str) -> pd.DataFrame:
@@ -793,8 +799,11 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_sdo_final_banco_invico(self, ejercicio:str = None) -> pd.DataFrame:
         df = SdoFinalBancoINVICO().from_sql(self.db_path + '/sscc.sqlite')
-        if ejercicio != None:  
-            df = df.loc[df['ejercicio'] == ejercicio]
+        if ejercicio != None:
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'sscc_cta_cte']]
         df = pd.merge(
@@ -805,43 +814,8 @@ class ImportDataFrame(HanglingPath):
         return df
 
     # --------------------------------------------------
-    def import_saldo_barrio(self, ejercicio:str = None) -> pd.DataFrame:
-        df = SaldoBarrio().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
-            df = df.loc[df['ejercicio'] <= ejercicio]
-        return df
-
-    # --------------------------------------------------
-    def import_saldo_barrio_variacion(self, ejercicio:str = None) -> pd.DataFrame:
-        df = SaldoBarrioVariacion().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
-            df = df.loc[df['ejercicio'] <= ejercicio]
-        return df
-
-    # --------------------------------------------------
-    def import_saldo_recuperos_cobrar_variacion(self, ejercicio:str = None) -> pd.DataFrame:
-        df = SaldoRecuperosCobrarVariacion().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
-            df = df.loc[df['ejercicio'] <= ejercicio]
-        return df
-    
-    # --------------------------------------------------
-    def import_saldo_motivo(self, ejercicio:str = None) -> pd.DataFrame:
-        df = SaldoMotivo().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
-            df = df.loc[df['ejercicio'] <= ejercicio]
-        return df
-
-    # --------------------------------------------------
-    def import_saldo_motivo_entrega_viviendas(self, ejercicio:str = None) -> pd.DataFrame:
-        df = SaldoMotivoEntregaViviendas().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
-            df = df.loc[df['ejercicio'] <= ejercicio]
-        return df
-
-    # --------------------------------------------------
-    def import_saldo_motivo_actualizacion_semetral(self, ejercicio:str = None) -> pd.DataFrame:
-        df = SaldoMotivoActualizacionSemestral().from_sql(self.db_path + '/sgv.sqlite') 
+    def import_barrios_nuevos(self, ejercicio:str = None) -> pd.DataFrame:
+        df = BarriosNuevos().from_sql(self.db_path + '/sgv.sqlite') 
         if ejercicio != None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
@@ -856,6 +830,41 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_resumen_recaudado(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenRecaudado().from_sql(self.db_path + '/sgv.sqlite') 
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] <= ejercicio]
+        return df
+
+    # --------------------------------------------------
+    def import_saldo_barrio_variacion(self, ejercicio:str = None) -> pd.DataFrame:
+        df = SaldoBarrioVariacion().from_sql(self.db_path + '/sgv.sqlite') 
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] <= ejercicio]
+        return df
+
+    # --------------------------------------------------
+    def import_saldo_barrio(self, ejercicio:str = None) -> pd.DataFrame:
+        df = SaldoBarrio().from_sql(self.db_path + '/sgv.sqlite') 
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] <= ejercicio]
+        return df
+
+    # --------------------------------------------------
+    def import_saldo_recuperos_cobrar_variacion(self, ejercicio:str = None) -> pd.DataFrame:
+        df = SaldoRecuperosCobrarVariacion().from_sql(self.db_path + '/sgv.sqlite') 
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] <= ejercicio]
+        return df
+    
+    # --------------------------------------------------
+    def import_saldo_motivo_por_barrio(self, ejercicio:str = None) -> pd.DataFrame:
+        df = SaldoMotivoPorBarrio().from_sql(self.db_path + '/sgv.sqlite') 
+        if ejercicio != None:
+            df = df.loc[df['ejercicio'] <= ejercicio]
+        return df
+
+    # --------------------------------------------------
+    def import_saldo_motivo(self, ejercicio:str = None) -> pd.DataFrame:
+        df = SaldoMotivo().from_sql(self.db_path + '/sgv.sqlite') 
         if ejercicio != None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df

@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 from invicodb.update import update_db
 from datar import base, dplyr, f, tidyr
+from typing import List
 
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 
@@ -103,37 +104,59 @@ class ControlRecursos(ImportDataFrame):
         return df
 
     # --------------------------------------------------
-    def control_mes_grupo(self):
+    def control_mes_grupo(self, groupby_cols:List[str] = ['ejercicio', 'mes', 'cta_cte']):
         siif_mes_gpo = self.import_siif_rci02()
         siif_mes_gpo = siif_mes_gpo.loc[siif_mes_gpo['es_invico'] == False]
         siif_mes_gpo = siif_mes_gpo.loc[siif_mes_gpo['es_remanente'] == False]
-        siif_mes_gpo = siif_mes_gpo >> \
-            dplyr.select(f.mes, f.grupo, f.importe) >> \
-            dplyr.group_by(f.mes, f.grupo) >> \
-            dplyr.summarise(recursos_siif = base.sum_(f.importe),
-                            _groups = 'drop')
+        
+        siif_mes_gpo = siif_mes_gpo.loc[:, groupby_cols + ['importe']]
+        siif_mes_gpo = siif_mes_gpo.groupby(groupby_cols).sum(numeric_only=True)
+        siif_mes_gpo = siif_mes_gpo.reset_index()
+        siif_mes_gpo = siif_mes_gpo.rename(columns={'importe': 'recursos_siif'})
         sscc_mes_gpo = self.import_banco_invico()
-        sscc_mes_gpo = sscc_mes_gpo >> \
-            dplyr.select(
-                f.mes, f.grupo, 
-                f.importe
-            ) >> \
-            dplyr.group_by(f.mes, f.grupo) >> \
-            dplyr.summarise(
-                depositos_sscc = base.sum_(f.importe),
-                _groups = 'drop')
-        control_mes_gpo = siif_mes_gpo >> \
-            dplyr.full_join(sscc_mes_gpo) >> \
-            dplyr.mutate(
-                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-            ) >> \
-            dplyr.mutate(
-                diferencia = f.recursos_siif - f.depositos_sscc
-            )
-            # dplyr.filter_(~dplyr.near(f.diferencia, 0))
-        control_mes_gpo.sort_values(by=['mes', 'grupo'], inplace= True)
-        control_mes_gpo = pd.DataFrame(control_mes_gpo)
-        control_mes_gpo.reset_index(drop=True, inplace=True)
+        sscc_mes_gpo = sscc_mes_gpo.loc[:, groupby_cols + ['importe']]
+        sscc_mes_gpo = sscc_mes_gpo.groupby(groupby_cols).sum(numeric_only=True)
+        sscc_mes_gpo = sscc_mes_gpo.reset_index()
+        sscc_mes_gpo = sscc_mes_gpo.rename(columns={'importe': 'depositos_sscc'})
+        siif_mes_gpo = siif_mes_gpo.set_index(groupby_cols)
+        sscc_mes_gpo = sscc_mes_gpo.set_index(groupby_cols)
+        # Obtener los índices faltantes en icaro
+        missing_indices = siif_mes_gpo.index.difference(sscc_mes_gpo.index)
+        # Reindexar el DataFrame icaro con los índices faltantes
+        sscc_mes_gpo = sscc_mes_gpo.reindex(sscc_mes_gpo.index.union(missing_indices))
+        siif_mes_gpo = siif_mes_gpo.reindex(sscc_mes_gpo.index)
+        siif_mes_gpo = siif_mes_gpo.fillna(0)
+        sscc_mes_gpo = sscc_mes_gpo.fillna(0)
+        control_mes_gpo = pd.merge(siif_mes_gpo, sscc_mes_gpo, how='inner', on=groupby_cols)
+        control_mes_gpo['diferencia'] = control_mes_gpo['recursos_siif'] - control_mes_gpo['depositos_sscc']
+
+        # siif_mes_gpo = siif_mes_gpo >> \
+        #     dplyr.select(f.mes, f.grupo, f.importe) >> \
+        #     dplyr.group_by(f.mes, f.grupo) >> \
+        #     dplyr.summarise(recursos_siif = base.sum_(f.importe),
+        #                     _groups = 'drop')
+        # sscc_mes_gpo = self.import_banco_invico()
+        # sscc_mes_gpo = sscc_mes_gpo >> \
+        #     dplyr.select(
+        #         f.mes, f.grupo, 
+        #         f.importe
+        #     ) >> \
+        #     dplyr.group_by(f.mes, f.grupo) >> \
+        #     dplyr.summarise(
+        #         depositos_sscc = base.sum_(f.importe),
+        #         _groups = 'drop')
+        # control_mes_gpo = siif_mes_gpo >> \
+        #     dplyr.full_join(sscc_mes_gpo) >> \
+        #     dplyr.mutate(
+        #         dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
+        #     ) >> \
+        #     dplyr.mutate(
+        #         diferencia = f.recursos_siif - f.depositos_sscc
+        #     )
+        #     # dplyr.filter_(~dplyr.near(f.diferencia, 0))
+        control_mes_gpo = control_mes_gpo.sort_values(by=groupby_cols)
+        # control_mes_gpo = pd.DataFrame(control_mes_gpo)
+        control_mes_gpo = control_mes_gpo.reset_index()
         return control_mes_gpo
 
     # --------------------------------------------------

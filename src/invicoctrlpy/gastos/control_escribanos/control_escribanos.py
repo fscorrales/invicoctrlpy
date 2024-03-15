@@ -405,6 +405,7 @@ class ControlEscribanos(ImportDataFrame):
         df = siif.merge(sgf, how='outer', on=groupby_cols)
         df = df.reset_index()
         df = df.fillna(0)
+        df['dif_pagos'] = df['pagos_fei'] - df['pagos_sgf']
         #Reindexamos el DataFrame
         # siif = siif.reset_index()
         # df = df.reindex(columns=siif.columns)

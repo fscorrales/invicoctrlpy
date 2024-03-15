@@ -7,6 +7,9 @@ Data required:
     - SIIF rfp_p605b (no obligatorio)
     - SIIF rf602
     - SIIF rf610
+    - SIIF gto_rpa03g
+    - SIIF rcg01_uejp
+    - SSCC Ctas Ctes (manual data)
 Packages:
  - invicodatpy (pip install '/home/kanou/IT/R Apps/R Gestion INVICO/invicodatpy')
  - invicoctrlpy (pip install -e '/home/kanou/IT/R Apps/R Gestion INVICO/invicoctrlpy')
@@ -52,7 +55,14 @@ class EjecucionGastos(ImportDataFrame):
             self.db_path + '/siif.sqlite')
         update_siif.update_ppto_gtos_fte_rf602()
         update_siif.update_ppto_gtos_desc_rf610()
+        update_siif.update_comprobantes_gtos_gpo_part_gto_rpa03g()
+        update_siif.update_comprobantes_gtos_rcg01_uejp()
         update_siif.update_form_gto_rfp_p605b()
+
+        update_sscc = update_db.UpdateSSCC(
+            update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
+            self.db_path + '/sscc.sqlite')
+        update_sscc.update_ctas_ctes()
 
     # --------------------------------------------------
     def import_dfs(self):

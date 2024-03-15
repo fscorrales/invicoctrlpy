@@ -78,6 +78,20 @@ class ControlObras(ImportDataFrame):
         self.import_icaro_carga(self.ejercicio)
         self.import_resumen_rend_cuit()
 
+    def import_icaro_obras(self) -> pd.DataFrame:
+        df = super().import_icaro_obras()
+        df['obra']
+        df = df.drop(columns=['id'])
+        # Supongamos que tienes un DataFrame df con una columna 'columna_con_numeros' que contiene los registros con la parte numérica al principio
+        df['obra_sin_cod'] = df['obra'].str.replace(r'^\d+-\d+', '', regex=True)
+        df['obra_sin_cod'] = df['obra_sin_cod'].str.lstrip()
+        df['imputacion'] = df['actividad'] + "-"+ df['partida']
+        df = pd.concat(
+            [df[['obra_sin_cod', 'imputacion']], 
+            df.drop(columns=['obra_sin_cod', 'imputacion'])], axis=1
+        )        
+        return df
+
     # --------------------------------------------------
     def import_resumen_rend_cuit(self):
         df = super().import_resumen_rend_cuit(

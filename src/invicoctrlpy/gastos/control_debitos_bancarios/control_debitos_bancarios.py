@@ -265,6 +265,7 @@ class ControlDebitosBancarios(ImportDataFrame):
         df = siif.merge(sscc, how='outer', on=groupby_cols)
         df = df.reset_index()
         df = df.fillna(0)
+        df['diferencia'] = df['ejecutado_siif'] - df['debitos_sscc']
         #Reindexamos el DataFrame
         # siif = siif.reset_index()
         # df = df.reindex(columns=siif.columns)
