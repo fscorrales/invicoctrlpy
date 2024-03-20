@@ -20,6 +20,7 @@ from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   PptoRecRi102, ResumenFdosRfondo07tp, FormGtoRfpP605b)
 from invicodatpy.slave.migrate_slave import MigrateSlave
 from invicodatpy.sscc.all import BancoINVICO, CtasCtes, SdoFinalBancoINVICO
+from invicodatpy.sgo.all import ListadoObras
 
 from .hangling_path import HanglingPath
 
@@ -112,9 +113,7 @@ class ImportDataFrame(HanglingPath):
         return self.icaro_carga
 
     # --------------------------------------------------
-    def import_icaro_obras(self, ejercicio:str = None, 
-                        neto_pa6:bool = False,
-                        neto_reg:bool = False) -> pd.DataFrame:
+    def import_icaro_obras(self) -> pd.DataFrame:
         df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'obras')  
         return self.df
 
@@ -867,4 +866,14 @@ class ImportDataFrame(HanglingPath):
         df = SaldoMotivo().from_sql(self.db_path + '/sgv.sqlite') 
         if ejercicio != None:
             df = df.loc[df['ejercicio'] <= ejercicio]
+        return df
+
+    # --------------------------------------------------
+    def import_sgo_listado_obras(self) -> pd.DataFrame:
+        df = ListadoObras().from_sql(self.db_path + '/sgo.sqlite')
+        df = df.loc[:, [
+            'cod_obra', 'obra', 'contratista', 'localidad', 'tipo_obra',
+            'operatoria', 'fecha_inicio', 'fecha_fin', 'avance_fis_real',
+            'nro_ultimo_certif', 'mes_obra_certif', 'monto_pagado', 
+        ]]  
         return df
