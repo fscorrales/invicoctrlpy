@@ -60,7 +60,7 @@ class ListadoObras(ImportDataFrame):
 
     def importIcaroObras(self) -> pd.DataFrame:
         df = super().import_icaro_obras()
-        df['obra']
+        # df['obra']
         df = df.drop(columns=['id'])
         # Supongamos que tienes un DataFrame df con una columna 'columna_con_numeros' que contiene los registros con la parte numérica al principio
         df['obra'] = df['obra'].str.replace(r'^\d+-\d+', '', regex=True)
@@ -69,24 +69,29 @@ class ListadoObras(ImportDataFrame):
         df = pd.concat(
             [df[['obra', 'imputacion']], 
             df.drop(columns=['obra', 'imputacion'])], axis=1
-        )        
+        )
+        df['obra'] = df['obra'].str.slice(0, 85)
+
         return df
     
     def importSGOListadoObras(self) -> pd.DataFrame:
-        return super().import_sgo_listado_obras()
+        df = super().import_sgo_listado_obras()
+        df['obra'] = df['obra'].str.slice(0, 85)
+
+        return df
 
     def icaroObrasConCodObras(self) -> pd.DataFrame:
-        icaro = self.importIcaroObras()
-        sgo = self.importSGOListadoObras()
+        icaro = self.importIcaroObras().copy()
+        sgo = self.importSGOListadoObras().copy()
         sgo = sgo.loc[:, ['cod_obra', 'obra']]
         df = icaro.merge(sgo, on='obra', how='left')
         df = df[['cod_obra'] + [col for col in df.columns if col != 'cod_obra']]
         return df
     
     def sgoObrasConImputacion(self) -> pd.DataFrame:
-        icaro = self.importIcaroObras()
+        icaro = self.importIcaroObras().copy()
         icaro = icaro.loc[:, ['imputacion', 'obra']]
-        sgo = self.importSGOListadoObras()
+        sgo = self.importSGOListadoObras().copy()
         df = sgo.merge(icaro, on='obra', how='left')
         df = df[['imputacion'] + [col for col in df.columns if col != 'imputacion']]
         return df
