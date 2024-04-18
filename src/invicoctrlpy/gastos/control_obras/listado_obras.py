@@ -71,19 +71,24 @@ class ListadoObras(ImportDataFrame):
             df.drop(columns=['obra', 'imputacion'])], axis=1
         )
         df['obra'] = df['obra'].str.slice(0, 85)
+        df['obra'] = df['obra'].str.strip()
 
         return df
     
     def importSGOListadoObras(self) -> pd.DataFrame:
         df = super().import_sgo_listado_obras()
         df['obra'] = df['obra'].str.slice(0, 85)
+        df['obra'] = df['obra'].str.strip()
 
         return df
 
     def icaroObrasConCodObras(self) -> pd.DataFrame:
         icaro = self.importIcaroObras().copy()
+        # "CONSTRUCCION 2 VIV. Y OBRAS COMP. PROP. DEL CONJUNTO - MERCEDES" denominación incompleta en SGF
+        # print(icaro.loc[icaro['obra'] =='PROG. LOTE PROPIO - SR. SANCHEZ GUILLERMO FRANCISCO']['obra'])
         sgo = self.importSGOListadoObras().copy()
         sgo = sgo.loc[:, ['cod_obra', 'obra']]
+        # print(sgo.loc[sgo['obra'] =='PROG. LOTE PROPIO - SR. SANCHEZ GUILLERMO FRANCISCO']['obra'])
         df = icaro.merge(sgo, on='obra', how='left')
         df = df[['cod_obra'] + [col for col in df.columns if col != 'cod_obra']]
         return df
