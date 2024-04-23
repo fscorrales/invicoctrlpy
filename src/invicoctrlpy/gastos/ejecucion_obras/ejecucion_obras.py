@@ -254,15 +254,18 @@ class EjecucionObras(ImportDataFrame):
     def reporte_planillometro(
         self, full_icaro:bool = False, 
         es_desc_siif:bool = True,
+        desagregar_partida:bool = True,
         desagregar_fuente:bool = True):
         df = self.import_icaro_carga_desc(es_desc_siif=es_desc_siif)
         df.sort_values(["actividad", "partida", "fuente"], inplace=True)
         group_cols = [
             "desc_prog", "desc_proy", "desc_act",
-            "actividad", "partida"
+            "actividad"
         ]
         if full_icaro:
             group_cols = group_cols + ['obra']
+        if desagregar_partida:
+            group_cols = group_cols + ['partida']
         if desagregar_fuente:
             group_cols = group_cols + ['fuente']
         # Ejercicio alta
