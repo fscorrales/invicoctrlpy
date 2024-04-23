@@ -255,7 +255,8 @@ class EjecucionObras(ImportDataFrame):
         self, full_icaro:bool = False, 
         es_desc_siif:bool = True,
         desagregar_partida:bool = True,
-        desagregar_fuente:bool = True):
+        desagregar_fuente:bool = True,
+        ultimos_ejercicios:str = 'All'):
         df = self.import_icaro_carga_desc(es_desc_siif=es_desc_siif)
         df.sort_values(["actividad", "partida", "fuente"], inplace=True)
         group_cols = [
@@ -288,6 +289,10 @@ class EjecucionObras(ImportDataFrame):
         df_anos = df.loc[:,
             group_cols +
             ["ejercicio", "importe"]]
+        if ultimos_ejercicios != 'All':
+            ejercicios = int(ultimos_ejercicios)
+            ejercicios = df_anos.sort_values('ejercicio', ascending=False).ejercicio.unique()[0:ejercicios]
+            df_anos = df_anos.loc[df_anos.ejercicio.isin(ejercicios)]
         df_anos = df_anos >>\
             tidyr.pivot_wider(
                 names_from= f.ejercicio,
