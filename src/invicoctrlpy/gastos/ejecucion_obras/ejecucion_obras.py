@@ -313,3 +313,78 @@ class EjecucionObras(ImportDataFrame):
         df = pd.DataFrame(df)
         df.reset_index(drop=True, inplace=True)
         return df
+
+   # --------------------------------------------------
+    def reporte_planillometro_contabilidad(
+        self, es_desc_siif:bool = True,
+        ultimos_ejercicios:str = 'All'):
+        df = self.import_icaro_carga_desc(es_desc_siif=es_desc_siif)
+        df.sort_values(["actividad", "partida", "fuente"], inplace=True)
+        group_cols = [
+            "desc_prog", "desc_proy", "desc_act",
+            "actividad"
+        ]
+
+        # Ejercicio alta
+        df_alta = df.groupby(group_cols).ejercicio.min().reset_index()
+        df_alta.rename(columns={'ejercicio':'alta'}, inplace=True)
+
+        df_ejercicios = df.copy()
+        if ultimos_ejercicios != 'All':
+            ejercicios = int(ultimos_ejercicios)
+            ejercicios = df_ejercicios.sort_values('ejercicio', ascending=False).ejercicio.unique()[0:ejercicios]
+            # df_anos = df_anos.loc[df_anos.ejercicio.isin(ejercicios)]
+        else:
+            ejercicios = df_ejercicios.sort_values('ejercicio', ascending=False).ejercicio.unique()
+
+        # Ejercicio actual
+        df_ejec_actual = df.copy()
+        df_ejec_actual = df_ejec_actual.loc[df_ejec_actual.ejercicio.isin(ejercicios)]
+        df_ejec_actual = df_ejec_actual.groupby(group_cols + ['ejercicio']).importe.sum().reset_index()
+        df_ejec_actual.rename(columns={'importe':'ejecucion'}, inplace=True)
+
+        # Ejecucion Acumulada
+        df_acum = pd.DataFrame()
+        for ejercicio in ejercicios:
+            df_ejercicio = df.copy()
+            df_ejercicio = df_ejercicio.loc[df_ejercicio.ejercicio.astype(int) <= int(ejercicio)]
+            df_ejercicio['ejercicio'] = ejercicio
+            df_ejercicio = df_ejercicio.groupby(group_cols + ['ejercicio']).importe.sum().reset_index()
+            df_ejercicio.rename(columns={'importe':'acum'}, inplace=True)
+            df_acum = pd.concat([df_acum, df_ejercicio])
+
+        # Obras en curso
+        df_curso = pd.DataFrame()
+        for ejercicio in ejercicios:
+            df_ejercicio = df.copy()
+            df_ejercicio = df_ejercicio.loc[df_ejercicio.ejercicio.astype(int) <= int(ejercicio)]
+            df_ejercicio['ejercicio'] = ejercicio
+            obras_curso = df_ejercicio.groupby(["obra"]).avance.max().to_frame()
+            obras_curso = obras_curso.loc[obras_curso.avance < 1].reset_index().obra
+            df_ejercicio = df_ejercicio.loc[
+                df_ejercicio.obra.isin(obras_curso)
+            ].groupby(group_cols + ['ejercicio']).importe.sum().reset_index()
+            df_ejercicio.rename(columns={'importe':'en_curso'}, inplace=True)
+            df_curso = pd.concat([df_curso, df_ejercicio])
+
+        # Obras terminadas anterior
+        df_term_ant = pd.DataFrame()
+        for ejercicio in ejercicios:
+            df_ejercicio = df.copy()
+            df_ejercicio = df_ejercicio.loc[df_ejercicio.ejercicio.astype(int) < int(ejercicio)]
+            df_ejercicio['ejercicio'] = ejercicio
+            obras_term_ant = df_ejercicio.groupby(["obra"]).avance.max().to_frame()
+            obras_term_ant = obras_term_ant.loc[obras_term_ant.avance == 1].reset_index().obra
+            df_ejercicio = df_ejercicio.loc[
+                df_ejercicio.obra.isin(obras_term_ant)
+            ].groupby(group_cols + ['ejercicio']).importe.sum().reset_index()
+            df_ejercicio.rename(columns={'importe':'terminadas_ant'}, inplace=True)
+            df_term_ant = pd.concat([df_term_ant, df_ejercicio])
+        
+        df = pd.merge(df_ejec_actual, df_alta, on=group_cols, how='left')
+        df = pd.merge(df, df_acum, on=group_cols + ['ejercicio'], how='left')
+        df = pd.merge(df, df_curso, on=group_cols + ['ejercicio'], how='left')
+        df = pd.merge(df, df_term_ant, on=group_cols + ['ejercicio'], how='left')
+        df = df.fillna(0)
+        df['terminadas_actual'] = df.acum - df.en_curso - df.terminadas_ant
+        return df
