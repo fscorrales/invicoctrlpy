@@ -381,8 +381,12 @@ class EjecucionObras(ImportDataFrame):
             df_ejercicio.rename(columns={'importe':'terminadas_ant'}, inplace=True)
             df_term_ant = pd.concat([df_term_ant, df_ejercicio])
         
-        df = pd.merge(df_ejec_actual, df_alta, on=group_cols, how='left')
-        df = pd.merge(df, df_acum, on=group_cols + ['ejercicio'], how='left')
+        df = pd.merge(df_alta, df_acum, on=group_cols, how='left')
+        df = pd.merge(df, df_ejec_actual, on= group_cols + ['ejercicio'], how='left')
+        cols = df.columns.tolist()
+        penultima_col = cols.pop(-2)  # Elimina la penúltima columna y la guarda
+        cols.append(penultima_col)  # Agrega la penúltima columna al final
+        df = df[cols]  # Reordena las columnas
         df = pd.merge(df, df_curso, on=group_cols + ['ejercicio'], how='left')
         df = pd.merge(df, df_term_ant, on=group_cols + ['ejercicio'], how='left')
         df = df.fillna(0)
