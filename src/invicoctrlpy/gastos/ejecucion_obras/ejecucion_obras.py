@@ -325,6 +325,9 @@ class EjecucionObras(ImportDataFrame):
             "actividad"
         ]
 
+        # Eliminamos aquellos ejercicios anteriores a 2008
+        df = df.loc[df.ejercicio.astype(int) >= 2008]
+
         # Ejercicio alta
         df_alta = df.groupby(group_cols).ejercicio.min().reset_index()
         df_alta.rename(columns={'ejercicio':'alta'}, inplace=True)
