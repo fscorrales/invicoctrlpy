@@ -317,13 +317,16 @@ class EjecucionObras(ImportDataFrame):
    # --------------------------------------------------
     def reporte_planillometro_contabilidad(
         self, es_desc_siif:bool = True,
-        ultimos_ejercicios:str = 'All'):
+        ultimos_ejercicios:str = 'All',
+        desagregar_partida:bool = True,):
         df = self.import_icaro_carga_desc(es_desc_siif=es_desc_siif)
         df.sort_values(["actividad", "partida", "fuente"], inplace=True)
         group_cols = [
             "desc_prog", "desc_proy", "desc_act",
             "actividad"
         ]
+        if desagregar_partida:
+            group_cols = group_cols + ['partida']
 
         # Eliminamos aquellos ejercicios anteriores a 2008
         df = df.loc[df.ejercicio.astype(int) >= 2008]
@@ -394,4 +397,7 @@ class EjecucionObras(ImportDataFrame):
         df = pd.merge(df, df_term_ant, on=group_cols + ['ejercicio'], how='left')
         df = df.fillna(0)
         df['terminadas_actual'] = df.acum - df.en_curso - df.terminadas_ant
+        df['actividad'] = df['actividad'] + '-' + df['partida']
+        df = df.rename(columns={'actividad':'estructura'})
+        df = df.drop(columns=['partida'])
         return df
