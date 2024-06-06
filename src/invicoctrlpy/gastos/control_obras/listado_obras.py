@@ -15,6 +15,7 @@ import os
 from dataclasses import dataclass
 
 import pandas as pd
+import numpy as np
 from datar import base, dplyr, f, tidyr
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 from invicodb.update import update_db
@@ -91,6 +92,11 @@ class ListadoObras(ImportDataFrame):
         # print(sgo.loc[sgo['obra'] =='PROG. LOTE PROPIO - SR. SANCHEZ GUILLERMO FRANCISCO']['obra'])
         df = icaro.merge(sgo, on='obra', how='left')
         df = df[['cod_obra'] + [col for col in df.columns if col != 'cod_obra']]
+        df['cod_obra'] = np.where(
+            (df['imputacion'].str.startswith('29-') & df['obra'].str[:3].str.isnumeric()), 
+            df['obra'].str[:3],
+            df['cod_obra']
+        )
         return df
     
     def sgoObrasConImputacion(self) -> pd.DataFrame:
