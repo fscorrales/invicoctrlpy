@@ -89,7 +89,9 @@ class IcaroVsSIIF(ImportDataFrame):
         df = super().import_siif_comprobantes(self.ejercicio)
         df = df.loc[
             (df['partida'].isin(['421', '422'])) |
-            ((df['partida'] == '354') & (~df['cuit'].isin(['30500049460', '30632351514'])))
+            ((df['partida'] == '354') & (~df['cuit'].isin([
+                '30500049460', '30632351514', '20231243527'
+            ])))
         ]
         return df
 
