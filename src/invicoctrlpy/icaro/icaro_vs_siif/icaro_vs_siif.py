@@ -78,13 +78,19 @@ class IcaroVsSIIF(ImportDataFrame):
     # --------------------------------------------------
     def import_siif_rf602(self):
         df = super().import_siif_rf602(self.ejercicio)
-        df = df[df['partida'].isin(['421', '422'])]
+        df = df.loc[
+            (df['partida'].isin(['421', '422'])) | 
+            (df['estructura'] == '01-00-00-03-354')
+        ]
         return df
 
     # --------------------------------------------------
     def import_siif_comprobantes(self):
         df = super().import_siif_comprobantes(self.ejercicio)
-        df = df[df['partida'].isin(['421', '422'])]
+        df = df.loc[
+            (df['partida'].isin(['421', '422'])) |
+            ((df['partida'] == '354') & (~df['cuit'].isin(['30500049460', '30632351514'])))
+        ]
         return df
 
     # --------------------------------------------------
@@ -99,6 +105,7 @@ class IcaroVsSIIF(ImportDataFrame):
         siif = self.import_siif_rf602().copy()
         siif = siif.loc[:, group_by + ['ordenado']]
         siif = siif.rename(columns={'ordenado':'ejecucion_siif'})
+        print(siif.head())
         df = pd.merge(siif, icaro, how='outer', on = group_by, copy=False)
         df = df.fillna(0)
         df['diferencia'] = df['ejecucion_siif'] - df['ejecucion_icaro']
