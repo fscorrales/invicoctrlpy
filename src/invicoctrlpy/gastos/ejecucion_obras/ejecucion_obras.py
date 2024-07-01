@@ -16,6 +16,7 @@ import os
 from dataclasses import dataclass, field
 
 import pandas as pd
+import numpy as np
 from datar import base, dplyr, f, tidyr
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 from invicodb.update import update_db
@@ -62,6 +63,38 @@ class EjecucionObras(ImportDataFrame):
     def import_dfs(self):
         self.import_ctas_ctes()
         self.siif_desc_pres = self.import_siif_desc_pres(ejercicio_to=self.ejercicio)
+
+    # --------------------------------------------------
+    def import_acum_2007(self):
+        file_path = os.path.join(
+            self.get_update_path_input(), 
+            'Reportes SIIF', 'Obras 2007 Unificado para Exportar (Depurado).xlsx'
+        )
+        df = pd.read_excel(file_path, dtype=str)
+        df['desc_prog'] = np.where(
+            df['proy'].isna(), 
+            df['prog'] + " - " +  df['Descripción'],
+            np.nan
+        )
+        df['desc_prog'] = df['desc_prog'].ffill()
+        df['desc_proy'] = np.where(
+            df['obra'].isna(), 
+            df['proy'] + " - " +  df['Descripción'],
+            np.nan
+        )
+        df['desc_proy'] = df['desc_proy'].ffill()
+        df['desc_act'] = np.where(
+            ~df['estructura'].isna(), 
+            df['obra'] + " - " +  df['Descripción'],
+            np.nan
+        )
+        df = df.dropna(subset=['estructura'])
+        df['acum_2007'] = df['acum_2007'].astype(float)
+        df = df.loc[:, [
+            'desc_prog', 'desc_proy', 'desc_act', 
+            'actividad', 'partida', 'alta', 'acum_2007'
+        ]]
+        return df
 
     # --------------------------------------------------
     def import_siif_obras_desc(self):
@@ -330,6 +363,15 @@ class EjecucionObras(ImportDataFrame):
 
         # Eliminamos aquellos ejercicios anteriores a 2008
         df = df.loc[df.ejercicio.astype(int) >= 2008]
+        print(df.columns)
+        print(df.head(1))
+        # Agregamos ejecución acumulada de Patricia
+        df_acum_2007 = self.import_acum_2007()
+        df_acum_2007['ejercicio'] = '2007'
+        df_acum_2007['avance'] = 1
+        df_acum_2007['obra'] = df_acum_2007['desc_act']
+        df_acum_2007 = df_acum_2007.rename(columns={'acum_2007':'importe'})
+        df = pd.concat([df, df_acum_2007])
 
         # Ejercicio alta
         df_alta = df.groupby(group_cols).ejercicio.min().reset_index()
