@@ -66,10 +66,16 @@ class EjecucionObras(ImportDataFrame):
 
     # --------------------------------------------------
     def import_acum_2007(self):
-        file_path = os.path.join(
-            self.get_update_path_input(), 
-            'Reportes SIIF', 'Obras 2007 Unificado para Exportar (Depurado).xlsx'
-        )
+        if self.input_path == None:
+            file_path = os.path.join(
+                self.get_update_path_input(), 
+                'Reportes SIIF', 'Obras 2007 Unificado para Exportar (Depurado).xlsx'
+            )
+        else:
+            file_path = os.path.join(
+                self.input_path, 
+                'Reportes SIIF', 'Obras 2007 Unificado para Exportar (Depurado).xlsx')
+
         df = pd.read_excel(file_path, dtype=str)
         df['desc_prog'] = np.where(
             df['proy'].isna(), 
