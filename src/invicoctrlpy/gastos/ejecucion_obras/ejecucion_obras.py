@@ -65,16 +65,16 @@ class EjecucionObras(ImportDataFrame):
         self.siif_desc_pres = self.import_siif_desc_pres(ejercicio_to=self.ejercicio)
 
     # --------------------------------------------------
-    def import_acum_2007(self):
+    def import_acum_2008(self):
         if self.input_path == None:
             file_path = os.path.join(
                 self.get_update_path_input(), 
-                'Reportes SIIF', 'Obras 2007 Unificado para Exportar (Depurado).xlsx'
+                'Reportes SIIF', 'Obras 2008 Unificado para Exportar (Depurado).xlsx'
             )
         else:
             file_path = os.path.join(
                 self.input_path, 
-                'Reportes SIIF', 'Obras 2007 Unificado para Exportar (Depurado).xlsx')
+                'Reportes SIIF', 'Obras 2008 Unificado para Exportar (Depurado).xlsx')
 
         df = pd.read_excel(file_path, dtype=str)
         df['desc_prog'] = np.where(
@@ -95,10 +95,10 @@ class EjecucionObras(ImportDataFrame):
             np.nan
         )
         df = df.dropna(subset=['estructura'])
-        df['acum_2007'] = df['acum_2007'].astype(float)
+        df['acum_2008'] = df['acum_2008'].astype(float)
         df = df.loc[:, [
             'desc_prog', 'desc_proy', 'desc_act', 
-            'actividad', 'partida', 'estructura', 'alta', 'acum_2007'
+            'actividad', 'partida', 'estructura', 'alta', 'acum_2008'
         ]]
         return df
 
@@ -358,7 +358,7 @@ class EjecucionObras(ImportDataFrame):
         self, es_desc_siif:bool = True,
         ultimos_ejercicios:str = 'All',
         desagregar_partida:bool = True,
-        agregar_acum_2007:bool = True):
+        agregar_acum_2008:bool = True):
         df = self.import_icaro_carga_desc(es_desc_siif=es_desc_siif)
         df.sort_values(["actividad", "partida", "fuente"], inplace=True)
         group_cols = [
@@ -368,18 +368,18 @@ class EjecucionObras(ImportDataFrame):
         if desagregar_partida:
             group_cols = group_cols + ['partida']
 
-        # Eliminamos aquellos ejercicios anteriores a 2008
-        df = df.loc[df.ejercicio.astype(int) >= 2008]
+        # Eliminamos aquellos ejercicios anteriores a 2009
+        df = df.loc[df.ejercicio.astype(int) >= 2009]
         # Agregamos ejecución acumulada de Patricia
-        if agregar_acum_2007:
-            df_acum_2007 = self.import_acum_2007()
-            df_acum_2007['ejercicio'] = '2007'
-            df_acum_2007['avance'] = 1
-            df_acum_2007['obra'] = df_acum_2007['desc_act']
-            df_acum_2007 = df_acum_2007.rename(columns={'acum_2007':'importe'})
+        if agregar_acum_2008:
+            df_acum_2008 = self.import_acum_2008()
+            df_acum_2008['ejercicio'] = '2008'
+            df_acum_2008['avance'] = 1
+            df_acum_2008['obra'] = df_acum_2008['desc_act']
+            df_acum_2008 = df_acum_2008.rename(columns={'acum_2008':'importe'})
             df['estructura'] = df['actividad'] + '-' + df['partida']
-            df_dif = df_acum_2007.loc[
-                df_acum_2007['estructura'].isin(df['estructura'].unique().tolist())
+            df_dif = df_acum_2008.loc[
+                df_acum_2008['estructura'].isin(df['estructura'].unique().tolist())
             ]
             df_dif = df_dif.drop(columns=['desc_prog', 'desc_proy', 'desc_act'])
             df_dif = pd.merge(
@@ -388,11 +388,11 @@ class EjecucionObras(ImportDataFrame):
                 on=['estructura'], how='left'
             )
             df = df.drop(columns=['estructura'])
-            df_acum_2007 = df_acum_2007.loc[
-                ~df_acum_2007['estructura'].isin(df_dif['estructura'].unique().tolist())
+            df_acum_2008 = df_acum_2008.loc[
+                ~df_acum_2008['estructura'].isin(df_dif['estructura'].unique().tolist())
             ]
-            df_acum_2007 = pd.concat([df_acum_2007, df_dif])
-            df = pd.concat([df, df_acum_2007])
+            df_acum_2008 = pd.concat([df_acum_2008, df_dif])
+            df = pd.concat([df, df_acum_2008])
 
         # Ejercicio alta
         df_alta = df.groupby(group_cols).ejercicio.min().reset_index()
