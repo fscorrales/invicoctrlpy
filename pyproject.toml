@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "invicoctrlpy"
+version = "0.1.0"
+description = "Set of classes, methods and jupyter notebooks to control INVICO’s (Instituto de Vivienda de Corrientes) budget execution. The database it's not provide within this package due to privacy reasons."
+authors = ["Fernando Corrales <fscpython@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+invicodatpy = {git = "https://github.com/fscorrales/invicodatpy.git"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
