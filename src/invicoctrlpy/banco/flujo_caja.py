@@ -16,7 +16,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from invicodb.update import update_db
-from datar import base, dplyr, f, tidyr
 
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 

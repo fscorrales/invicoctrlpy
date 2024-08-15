@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
-from datar import base, dplyr, f
+# from datar import base, dplyr, f
 from invicodatpy.icaro.migrate_icaro import MigrateIcaro
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
 from invicodatpy.sgv.all import (ResumenFacturado, ResumenRecaudado,

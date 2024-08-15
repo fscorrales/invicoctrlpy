@@ -16,13 +16,11 @@ Packages:
 """
 
 import datetime as dt
-import os
 from dataclasses import dataclass, field
 
 import pandas as pd
-from datar import base, dplyr, f, tidyr
-from invicoctrlpy.utils.import_dataframe import ImportDataFrame
-from invicodb.update import update_db
+from ...utils.import_dataframe import ImportDataFrame
+# from invicodb.update import update_db
 
 
 @dataclass
@@ -31,7 +29,7 @@ class EjecucionGastos(ImportDataFrame):
     ejercicio:str = str(dt.datetime.now().year)
     input_path:str = None
     db_path:str = None
-    update_db:bool = False
+    # update_db:bool = False
     siif_desc_pres:pd.DataFrame = field(init=False, repr=False)
     siif_ejec_obras:pd.DataFrame = field(init=False, repr=False)
 
@@ -39,30 +37,30 @@ class EjecucionGastos(ImportDataFrame):
     def __post_init__(self):
         if self.db_path == None:
             self.get_db_path()
-        if self.update_db:
-            self.update_sql_db()
+        # if self.update_db:
+        #     self.update_sql_db()
         self.import_dfs()
 
     # --------------------------------------------------
-    def update_sql_db(self):
-        if self.input_path == None:
-            update_path_input = self.get_update_path_input()
-        else:
-            update_path_input = self.input_path
+    # def update_sql_db(self):
+    #     if self.input_path == None:
+    #         update_path_input = self.get_update_path_input()
+    #     else:
+    #         update_path_input = self.input_path
 
-        update_siif = update_db.UpdateSIIF(
-            update_path_input + '/Reportes SIIF', 
-            self.db_path + '/siif.sqlite')
-        update_siif.update_ppto_gtos_fte_rf602()
-        update_siif.update_ppto_gtos_desc_rf610()
-        update_siif.update_comprobantes_gtos_gpo_part_gto_rpa03g()
-        update_siif.update_comprobantes_gtos_rcg01_uejp()
-        update_siif.update_form_gto_rfp_p605b()
+    #     update_siif = update_db.UpdateSIIF(
+    #         update_path_input + '/Reportes SIIF', 
+    #         self.db_path + '/siif.sqlite')
+    #     update_siif.update_ppto_gtos_fte_rf602()
+    #     update_siif.update_ppto_gtos_desc_rf610()
+    #     update_siif.update_comprobantes_gtos_gpo_part_gto_rpa03g()
+    #     update_siif.update_comprobantes_gtos_rcg01_uejp()
+    #     update_siif.update_form_gto_rfp_p605b()
 
-        update_sscc = update_db.UpdateSSCC(
-            update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
-            self.db_path + '/sscc.sqlite')
-        update_sscc.update_ctas_ctes()
+    #     update_sscc = update_db.UpdateSSCC(
+    #         update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
+    #         self.db_path + '/sscc.sqlite')
+    #     update_sscc.update_ctas_ctes()
 
     # --------------------------------------------------
     def import_dfs(self):
@@ -87,12 +85,11 @@ class EjecucionGastos(ImportDataFrame):
             axis=1, inplace=True
             )
         df["programa"] = df['programa'].astype('int')
-        df = df >>\
-            dplyr.select(
-                f.ejercicio, f.estructura, f.partida, f.fuente,
-                f.desc_prog, f.desc_subprog, f.desc_proy, f.desc_act,
-                dplyr.everything()
-            )
+
+        first_cols = ['ejercicio', 'estructura', 'partida', 'fuente',
+                        'desc_prog', 'desc_subprog', 'desc_proy', 'desc_act']
+        df = df.loc[:, first_cols].join(df.drop(first_cols, axis=1))
+
         df = pd.DataFrame(df)
         df.reset_index(drop=True, inplace=True)
         return df
@@ -100,3 +97,12 @@ class EjecucionGastos(ImportDataFrame):
     # --------------------------------------------------
     def import_siif_comprobantes(self) -> pd.DataFrame:
         return super().import_siif_comprobantes(self.ejercicio)
+
+if __name__ == "__main__":
+    EJERCICIO = '2023'
+    ejecucion_gastos = EjecucionGastos(ejercicio=EJERCICIO)
+    siif_ejec_gastos = ejecucion_gastos.import_siif_gtos_desc()
+    print(siif_ejec_gastos)
+
+    # From invicoctrlpy/src
+    # python -m invicoctrlpy.gastos.ejecucion_gastos.ejecucion_gastos

@@ -18,7 +18,6 @@ import datetime as dt
 from dataclasses import dataclass
 
 import pandas as pd
-from datar import base, dplyr, f, tidyr
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 from invicodb.update import update_db
 
@@ -135,34 +134,3 @@ class ControlHaberes(ImportDataFrame):
         df['dif_acum'] = df['diferencia'].cumsum()
         df.reset_index(drop=True, inplace=True)
         return df
-
-    # --------------------------------------------------
-    def control_completo(self):
-        siif = self.siif_comprobantes_haberes_neto_rdeu.copy()
-        siif = siif >> \
-            dplyr.rename_with(lambda x: 'siif_' + x) >> \
-            dplyr.rename(
-                ejercicio = f.siif_ejercicio,
-                mes = f.siif_mes
-            )
-        sscc = self.sscc_banco_invico.copy()
-        sscc = sscc >> \
-            dplyr.rename_with(lambda x: 'sscc_' + x) >> \
-            dplyr.rename(
-                ejercicio = f.sscc_ejercicio,
-                mes = f.sscc_mes,
-            )
-        control_completo = sscc >> \
-            dplyr.full_join(siif) >> \
-            dplyr.mutate(
-                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-            ) >> \
-            dplyr.mutate(
-                diferencia = f.siif_importe - f.sscc_importe
-            )
-        control_completo.sort_values(
-            by=['mes'], 
-            inplace= True)
-        control_completo = pd.DataFrame(control_completo)
-        control_completo.reset_index(drop=True, inplace=True)
-        return control_completo

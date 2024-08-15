@@ -13,9 +13,6 @@ comm==0.1.2
 comtypes==1.2.0
 contourpy==1.0.7
 cycler==0.11.0
-datar==0.11.1
-datar-numpy==0.1.0
-datar-pandas==0.2.0
 debugpy==1.6.4
 decorator==5.1.1
 defusedxml==0.7.1

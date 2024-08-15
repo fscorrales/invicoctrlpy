@@ -7,9 +7,13 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "~3.10"
 invicodatpy = {git = "https://github.com/fscorrales/invicodatpy.git"}
 
+
+[tool.poetry.group.test.dependencies]
+ipykernel = "^6.29.5"
+itables = "^2.1.4"
 
 [build-system]
 requires = ["poetry-core"]

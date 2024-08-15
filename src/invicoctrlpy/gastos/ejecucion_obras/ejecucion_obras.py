@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 import numpy as np
-from datar import base, dplyr, f, tidyr
+
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 from invicodb.update import update_db
 
@@ -115,12 +115,11 @@ class EjecucionObras(ImportDataFrame):
             'grupo'], 
             axis=1, inplace=True
             )
-        df = df >>\
-            dplyr.select(
-                f.ejercicio, f.estructura, f.partida, f.fuente,
-                f.desc_prog, f.desc_subprog, f.desc_proy, f.desc_act,
-                dplyr.everything()
-            )
+
+        first_cols = ['ejercicio', 'estructura', 'partida', 'fuente',
+                        'desc_prog', 'desc_subprog', 'desc_proy', 'desc_act']
+        df = df.loc[:, first_cols].join(df.drop(first_cols, axis=1))
+
         df = pd.DataFrame(df)
         df.reset_index(drop=True, inplace=True)
         return df
@@ -149,13 +148,11 @@ class EjecucionObras(ImportDataFrame):
             'desc_proy':'proy_con_desc',
             'desc_act':'act_con_desc',
         }, inplace=True)
-        df = df >>\
-            dplyr.select(
-                f.estructura, f.partida, f.fuente,
-                f.prog_con_desc,  
-                f.proy_con_desc, f.act_con_desc,
-                dplyr.everything()
-            )
+        
+        first_cols = ['estructura', 'partida', 'fuente',
+                        'prog_con_desc', 'proy_con_desc', 'act_con_desc']
+        df = df.loc[:, first_cols].join(df.drop(first_cols, axis=1))
+
         df = pd.DataFrame(df)
         df.reset_index(drop=True, inplace=True)
         return df
