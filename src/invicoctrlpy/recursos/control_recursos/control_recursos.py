@@ -12,13 +12,11 @@ Packages:
  - invicoctrlpy (pip install -e '/home/kanou/IT/R Apps/R Gestion INVICO/invicoctrlpy')
 """
 
-import datetime as dt
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from invicodb.update import update_db
-# from datar import base, dplyr, f, tidyr
+# from invicodb.update import update_db
 from typing import List
 
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
@@ -30,35 +28,35 @@ class ControlRecursos(ImportDataFrame):
     ejercicio:str = None
     input_path:str = None
     db_path:str = None
-    update_db:bool = False
+    # update_db:bool = False
 
     # --------------------------------------------------
     def __post_init__(self):
         if self.db_path == None:
             self.get_db_path()
-        if self.update_db:
-            self.update_sql_db()
+        # if self.update_db:
+        #     self.update_sql_db()
         if self.ejercicio == '':
             self.ejercicio = None
         self.import_dfs()
 
     # --------------------------------------------------
-    def update_sql_db(self):
-        if self.input_path == None:
-            update_path_input = self.get_update_path_input()
-        else:
-            update_path_input = self.input_path
+    # def update_sql_db(self):
+    #     if self.input_path == None:
+    #         update_path_input = self.get_update_path_input()
+    #     else:
+    #         update_path_input = self.input_path
 
-        update_siif = update_db.UpdateSIIF(
-            update_path_input + '/Reportes SIIF', 
-            self.db_path + '/siif.sqlite')
-        update_siif.update_comprobantes_rec_rci02()
+    #     update_siif = update_db.UpdateSIIF(
+    #         update_path_input + '/Reportes SIIF', 
+    #         self.db_path + '/siif.sqlite')
+    #     update_siif.update_comprobantes_rec_rci02()
         
-        update_sscc = update_db.UpdateSSCC(
-            update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
-            self.db_path + '/sscc.sqlite')
-        update_sscc.update_ctas_ctes()
-        update_sscc.update_banco_invico()
+    #     update_sscc = update_db.UpdateSSCC(
+    #         update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
+    #         self.db_path + '/sscc.sqlite')
+    #     update_sscc.update_ctas_ctes()
+    #     update_sscc.update_banco_invico()
 
     # --------------------------------------------------
     def import_dfs(self):
@@ -130,69 +128,10 @@ class ControlRecursos(ImportDataFrame):
         control_mes_gpo = pd.merge(siif_mes_gpo, sscc_mes_gpo, how='inner', on=groupby_cols)
         control_mes_gpo['diferencia'] = control_mes_gpo['recursos_siif'] - control_mes_gpo['depositos_sscc']
 
-        # siif_mes_gpo = siif_mes_gpo >> \
-        #     dplyr.select(f.mes, f.grupo, f.importe) >> \
-        #     dplyr.group_by(f.mes, f.grupo) >> \
-        #     dplyr.summarise(recursos_siif = base.sum_(f.importe),
-        #                     _groups = 'drop')
-        # sscc_mes_gpo = self.import_banco_invico()
-        # sscc_mes_gpo = sscc_mes_gpo >> \
-        #     dplyr.select(
-        #         f.mes, f.grupo, 
-        #         f.importe
-        #     ) >> \
-        #     dplyr.group_by(f.mes, f.grupo) >> \
-        #     dplyr.summarise(
-        #         depositos_sscc = base.sum_(f.importe),
-        #         _groups = 'drop')
-        # control_mes_gpo = siif_mes_gpo >> \
-        #     dplyr.full_join(sscc_mes_gpo) >> \
-        #     dplyr.mutate(
-        #         dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-        #     ) >> \
-        #     dplyr.mutate(
-        #         diferencia = f.recursos_siif - f.depositos_sscc
-        #     )
-        #     # dplyr.filter_(~dplyr.near(f.diferencia, 0))
         control_mes_gpo = control_mes_gpo.sort_values(by=groupby_cols)
-        # control_mes_gpo = pd.DataFrame(control_mes_gpo)
+
         control_mes_gpo = control_mes_gpo.reset_index()
         return control_mes_gpo
-
-    # --------------------------------------------------
-    def control_mes_grupo_cta_cte(self):
-        siif_mes_gpo_cta_cte = self.import_siif_rci02()
-        siif_mes_gpo_cta_cte = siif_mes_gpo_cta_cte.loc[siif_mes_gpo_cta_cte['es_invico'] == False]
-        siif_mes_gpo_cta_cte = siif_mes_gpo_cta_cte.loc[siif_mes_gpo_cta_cte['es_remanente'] == False]
-        siif_mes_gpo_cta_cte = siif_mes_gpo_cta_cte >> \
-            dplyr.select(f.mes, f.grupo, f.cta_cte, f.importe) >> \
-            dplyr.group_by(f.mes, f.grupo, f.cta_cte) >> \
-            dplyr.summarise(recursos_siif = base.sum_(f.importe),
-                            _groups = 'drop')
-        sscc_mes_gpo_cta_cte = self.import_banco_invico()
-        sscc_mes_gpo_cta_cte = sscc_mes_gpo_cta_cte >> \
-            dplyr.select(
-                f.mes, f.grupo, f.cta_cte,
-                f.importe
-            ) >> \
-            dplyr.group_by(f.mes, f.grupo, f.cta_cte) >> \
-            dplyr.summarise(
-                depositos_sscc = base.sum_(f.importe),
-                _groups = 'drop')
-        control_mes_gpo_cta_cte = siif_mes_gpo_cta_cte >> \
-            dplyr.full_join(sscc_mes_gpo_cta_cte) >> \
-            dplyr.mutate(
-                dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-            ) >> \
-            dplyr.mutate(
-                diferencia = f.recursos_siif - f.depositos_sscc
-            )
-            # dplyr.filter_(~dplyr.near(f.diferencia, 0))
-        control_mes_gpo_cta_cte.sort_values(by=['mes', 'grupo', 'cta_cte'], inplace= True)
-        control_mes_gpo_cta_cte = pd.DataFrame(control_mes_gpo_cta_cte)
-        control_mes_gpo_cta_cte.reset_index(drop=True, inplace=True)
-        return control_mes_gpo_cta_cte
-
     # --------------------------------------------------
     def control_recursos(self):
         group_by = ['ejercicio', 'mes', 'cta_cte', 'grupo']
@@ -208,49 +147,3 @@ class ControlRecursos(ImportDataFrame):
         sscc = sscc.rename(columns={'importe':'depositos_banco'})
         control = pd.merge(siif, sscc, how='outer')       
         return control
-
-    # # --------------------------------------------------
-    # def control_completo(self):
-    #     icaro_completo = self.icaro_neto_rdeu.copy()
-    #     icaro_completo = icaro_completo >> \
-    #         dplyr.rename_with(lambda x: 'icaro_' + x) >> \
-    #         dplyr.rename(
-    #             ejercicio = f.icaro_ejercicio,
-    #             mes = f.icaro_mes,
-    #             fecha = f.icaro_fecha,
-    #             cta_cte = f.icaro_cta_cte,
-    #             cuit = f.icaro_cuit,
-    #         )
-    #     sgf_completo = self.sgf_resumen_rend_cuit.copy()
-    #     sgf_completo = sgf_completo >> \
-    #         dplyr.rename_with(lambda x: 'sgf_' + x) >> \
-    #         dplyr.rename(
-    #             ejercicio = f.sgf_ejercicio,
-    #             mes = f.sgf_mes,
-    #             fecha = f.sgf_fecha,
-    #             cta_cte = f.sgf_cta_cte,
-    #             cuit = f.sgf_cuit,
-    #         )
-    #         # dplyr.select(
-    #         #     f.mes, f.fecha, f.cta_cte, 
-    #         #     f.beneficiario, 
-    #         #     libramiento = f.libramiento_sgf,
-    #         #     neto_sgf = f.importe_neto, 
-    #         #     retenciones_sgf = f.retenciones,
-    #         # )
-    #     control_completo = sgf_completo >> \
-    #         dplyr.full_join(icaro_completo) >> \
-    #         dplyr.mutate(
-    #             dplyr.across(dplyr.where(base.is_numeric), tidyr.replace_na, 0)
-    #         ) >> \
-    #         dplyr.mutate(
-    #             diferencia = f.icaro_importe - f.sgf_importe_bruto
-    #         )
-    #     control_completo.sort_values(
-    #         by=['mes', 'fecha','cta_cte', 'cuit'], 
-    #         inplace= True)
-    #     control_completo = pd.DataFrame(control_completo)
-    #     control_completo.reset_index(drop=True, inplace=True)
-    #     return control_completo
-
-# Ajuste Reemplazo de Chq y Cert Neg???

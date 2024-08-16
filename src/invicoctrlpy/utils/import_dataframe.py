@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
-# from datar import base, dplyr, f
+
 from invicodatpy.icaro.migrate_icaro import MigrateIcaro
 from invicodatpy.sgf.all import JoinResumenRendProvCuit, ResumenRendProv
 from invicodatpy.sgv.all import (ResumenFacturado, ResumenRecaudado,
@@ -666,9 +666,10 @@ class ImportDataFrame(HanglingPath):
         #         f.libramiento_sgf, 
         #         _keep_all=True
         #     )
-        df = df >> \
-            dplyr.filter_(f.cta_cte != '106') >> \
-            dplyr.bind_rows(df_106)
+        df = pd.concat([df[df['cta_cte'] != '106'], df_106])
+        # df = df >> \
+            # dplyr.filter_(f.cta_cte != '106') >> \
+            # dplyr.bind_rows(df_106)
         self.sgf_resumen_rend = pd.DataFrame(df)
         return self.sgf_resumen_rend
 
@@ -695,9 +696,10 @@ class ImportDataFrame(HanglingPath):
             'mes', 'fecha', 'beneficiario', 
             'libramiento_sgf', 'importe_bruto'
         ])
-        df = df >> \
-            dplyr.filter_(f.cta_cte != '106') >> \
-            dplyr.bind_rows(df_106)
+        df = pd.concat([df[df['cta_cte'] != '106'], df_106], ignore_index=True)
+        # df = df >> \
+        #     dplyr.filter_(f.cta_cte != '106') >> \
+        #     dplyr.bind_rows(df_106)
         #Filtramos los registros duplicados en la 106
         df_2210178150 = df.copy()
         df_2210178150 = df_2210178150.loc[df_2210178150['cta_cte'] == '2210178150']
@@ -705,32 +707,53 @@ class ImportDataFrame(HanglingPath):
             'mes', 'fecha', 'beneficiario', 
             'libramiento_sgf', 'importe_bruto'
         ])
-        df = df >> \
-            dplyr.filter_(f.cta_cte != '2210178150') >> \
-            dplyr.bind_rows(df_2210178150)
+        df = df[df['cta_cte'] != '2210178150']
+        df = pd.concat(
+            [df[df['cta_cte'] != '2210178150'], df_2210178150], 
+            ignore_index=True
+        )
+        # df = df >> \
+        #     dplyr.filter_(f.cta_cte != '2210178150') >> \
+        #     dplyr.bind_rows(df_2210178150)
         if neto_cert_neg:
             self.import_banco_invico(ejercicio=ejercicio)
             banco_invico = self.sscc_banco_invico.copy()
-            banco_invico = banco_invico >> \
-                dplyr.filter_(f.cod_imputacion == '018') >> \
-                dplyr.filter_(f.es_cheque == False) >> \
-                dplyr.filter_(f.movimiento == 'DEPOSITO') >> \
-                dplyr.mutate(
-                    origen = 'BANCO',
-                    cuit = '30632351514',
-                    beneficiario = f.concepto,
-                    destino = f.imputacion,
-                    importe_bruto = f.importe * (-1),
-                    importe_neto = f.importe_bruto
-                ) >> \
-                dplyr.select(
-                    f.ejercicio, f.mes, f.fecha, f.cta_cte,
-                    f.origen, f.cuit, f.beneficiario,
-                    f.movimiento, f.destino, 
-                    f.importe_bruto, f.importe_neto
-                )
-            df = df >> \
-                dplyr.bind_rows(banco_invico, _copy=False)
+            banco_invico = banco_invico.loc[(banco_invico['cod_imputacion'] == '018') & 
+                                            (banco_invico['es_cheque'] == False) & 
+                                            (banco_invico['movimiento'] == 'DEPOSITO')]
+            banco_invico['origen'] = 'BANCO'
+            banco_invico['cuit'] = '30632351514'
+            banco_invico['beneficiario'] = banco_invico['concepto']
+            banco_invico['destino'] = banco_invico['imputacion']
+            banco_invico['importe_bruto'] = banco_invico['importe'] * (-1)
+            banco_invico['importe_neto'] = banco_invico['importe_bruto']
+            banco_invico = banco_invico.loc[:, [
+                'ejercicio', 'mes', 'fecha', 'cta_cte',
+                'origen', 'cuit', 'beneficiario',
+                'movimiento', 'destino', 
+                'importe_bruto', 'importe_neto'
+            ]]
+            # banco_invico = banco_invico >> \
+            #     dplyr.filter_(f.cod_imputacion == '018') >> \
+            #     dplyr.filter_(f.es_cheque == False) >> \
+            #     dplyr.filter_(f.movimiento == 'DEPOSITO') >> \
+            #     dplyr.mutate(
+            #         origen = 'BANCO',
+            #         cuit = '30632351514',
+            #         beneficiario = f.concepto,
+            #         destino = f.imputacion,
+            #         importe_bruto = f.importe * (-1),
+            #         importe_neto = f.importe_bruto
+            #     ) >> \
+            #     dplyr.select(
+            #         f.ejercicio, f.mes, f.fecha, f.cta_cte,
+            #         f.origen, f.cuit, f.beneficiario,
+            #         f.movimiento, f.destino, 
+            #         f.importe_bruto, f.importe_neto
+            #     )
+            df = pd.concat([df, banco_invico], ignore_index=True)
+            # df = df >> \
+            #     dplyr.bind_rows(banco_invico, _copy=False)
         self.sgf_resumen_rend_cuit = pd.DataFrame(df)
         return self.sgf_resumen_rend_cuit
 
