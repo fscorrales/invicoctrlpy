@@ -19,7 +19,7 @@ import pandas as pd
 import numpy as np
 
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
-from invicodb.update import update_db
+# from invicodb.update import update_db
 
 
 @dataclass
@@ -28,7 +28,7 @@ class EjecucionObras(ImportDataFrame):
     ejercicio:str = str(dt.datetime.now().year)
     input_path:str = None
     db_path:str = None
-    update_db:bool = False
+    # update_db:bool = False
     siif_desc_pres:pd.DataFrame = field(init=False, repr=False)
     siif_ejec_obras:pd.DataFrame = field(init=False, repr=False)
 
@@ -36,28 +36,28 @@ class EjecucionObras(ImportDataFrame):
     def __post_init__(self):
         if self.db_path == None:
             self.get_db_path()
-        if self.update_db:
-            self.update_sql_db()
+        # if self.update_db:
+        #     self.update_sql_db()
         self.import_dfs()
 
     # --------------------------------------------------
-    def update_sql_db(self):
-        if self.input_path == None:
-            update_path_input = self.get_update_path_input()
-        else:
-            update_path_input = self.input_path
+    # def update_sql_db(self):
+    #     if self.input_path == None:
+    #         update_path_input = self.get_update_path_input()
+    #     else:
+    #         update_path_input = self.input_path
 
-        update_icaro = update_db.UpdateIcaro(
-            os.path.dirname(os.path.dirname(self.db_path)) + 
-            '/R Output/SQLite Files/ICARO.sqlite', 
-            self.db_path + '/icaro.sqlite')
-        update_icaro.migrate_icaro()
+    #     update_icaro = update_db.UpdateIcaro(
+    #         os.path.dirname(os.path.dirname(self.db_path)) + 
+    #         '/R Output/SQLite Files/ICARO.sqlite', 
+    #         self.db_path + '/icaro.sqlite')
+    #     update_icaro.migrate_icaro()
 
-        update_siif = update_db.UpdateSIIF(
-            update_path_input + '/Reportes SIIF', 
-            self.db_path + '/siif.sqlite')
-        update_siif.update_ppto_gtos_fte_rf602()
-        update_siif.update_ppto_gtos_desc_rf610()
+    #     update_siif = update_db.UpdateSIIF(
+    #         update_path_input + '/Reportes SIIF', 
+    #         self.db_path + '/siif.sqlite')
+    #     update_siif.update_ppto_gtos_fte_rf602()
+    #     update_siif.update_ppto_gtos_desc_rf610()
 
     # --------------------------------------------------
     def import_dfs(self):
@@ -245,34 +245,55 @@ class EjecucionObras(ImportDataFrame):
             df_pivot = df.loc[:,
                 group_cols +
                 ["info_adicional", "importe"]]
-            df_pivot = df_pivot >>\
-                tidyr.pivot_wider(
-                    names_from= f.info_adicional,
-                    values_from = f.importe,
-                    values_fn = base.sum,
-                    values_fill = 0
-                )
+            df_pivot = df_pivot.pivot_table(
+                index=group_cols, columns='info_adicional', 
+                values='importe', aggfunc='sum', fill_value=0
+            )
+            df_pivot.reset_index(inplace=True)
+            # df_pivot.rename_axis(columns=None, inplace=True)
+            # df_pivot = df_pivot >>\
+            #     tidyr.pivot_wider(
+            #         names_from= f.info_adicional,
+            #         values_from = f.importe,
+            #         values_fn = base.sum,
+            #         values_fill = 0
+            #     )
         else:
             df_pivot = df.loc[:,
                 group_cols +
                 ["ejercicio", "importe"]]
-            df_pivot = df_pivot >>\
-                tidyr.pivot_wider(
-                    names_from= f.ejercicio,
-                    values_from = f.importe,
-                    values_fn = base.sum,
-                    values_fill = 0
-                )          
+            df_pivot = df_pivot.pivot_table(
+                index=group_cols,
+                columns='ejercicio',
+                values='importe',
+                aggfunc='sum',
+                fill_value=0
+            )
+            df_pivot = df_pivot.reset_index()
+            # df_pivot.rename_axis(columns=None, inplace=True)
+            # df_pivot = df_pivot >>\
+            #     tidyr.pivot_wider(
+            #         names_from= f.ejercicio,
+            #         values_from = f.importe,
+            #         values_fn = base.sum,
+            #         values_fill = 0
+            #     )          
 
         # Agrupamos todo
-        df = df_alta >>\
-            dplyr.left_join(df_pivot) >>\
-            dplyr.left_join(df_total) >>\
-            dplyr.left_join(df_curso) >>\
-            dplyr.left_join(df_term_ant) >>\
-            tidyr.replace_na(0) >>\
-            dplyr.mutate(
-                terminadas_actual = f.ejecucion_total - f.en_curso - f.terminadas_ant)
+        df = pd.merge(df_alta, df_pivot, how='left', on=group_cols)
+        df = pd.merge(df, df_total, how='left', on=group_cols)
+        df = pd.merge(df, df_curso, how='left', on=group_cols)
+        df = pd.merge(df, df_term_ant, how='left', on=group_cols)
+        df.fillna(0, inplace=True)
+        df['terminadas_actual'] = df.ejecucion_total - df.en_curso - df.terminadas_ant
+        # df = df_alta >>\
+        #     dplyr.left_join(df_pivot) >>\
+        #     dplyr.left_join(df_total) >>\
+        #     dplyr.left_join(df_curso) >>\
+        #     dplyr.left_join(df_term_ant) >>\
+        #     tidyr.replace_na(0) >>\
+        #     dplyr.mutate(
+        #         terminadas_actual = f.ejecucion_total - f.en_curso - f.terminadas_ant)
         df = pd.DataFrame(df)
         df.reset_index(drop=True, inplace=True)
         df.rename(columns = {'': 'Sin Convenio'}, inplace = True)
@@ -329,23 +350,33 @@ class EjecucionObras(ImportDataFrame):
             ejercicios = int(ultimos_ejercicios)
             ejercicios = df_anos.sort_values('ejercicio', ascending=False).ejercicio.unique()[0:ejercicios]
             df_anos = df_anos.loc[df_anos.ejercicio.isin(ejercicios)]
-        df_anos = df_anos >>\
-            tidyr.pivot_wider(
-                names_from= f.ejercicio,
-                values_from = f.importe,
-                values_fn = base.sum,
-                values_fill = 0
-            )
+        df_anos = df_anos.pivot_table(
+            index=group_cols, columns='ejercicio', values='importe',
+            aggfunc='sum', fill_value=0
+        ).reset_index()
+        # df_anos = df_anos >>\
+        #     tidyr.pivot_wider(
+        #         names_from= f.ejercicio,
+        #         values_from = f.importe,
+        #         values_fn = base.sum,
+        #         values_fill = 0
+        #     )
 
         # Agrupamos todo
-        df = df_alta >>\
-            dplyr.left_join(df_anos) >>\
-            dplyr.left_join(df_acum) >>\
-            dplyr.left_join(df_curso) >>\
-            dplyr.left_join(df_term_ant) >>\
-            tidyr.replace_na(0) >>\
-            dplyr.mutate(
-                terminadas_actual = f.acum - f.en_curso - f.terminadas_ant)
+        df = pd.merge(df_alta, df_anos, how='left', on=group_cols)
+        df = pd.merge(df, df_acum, how='left', on=group_cols)
+        df = pd.merge(df, df_curso, how='left', on=group_cols)
+        df = pd.merge(df, df_term_ant, how='left', on=group_cols)
+        df.fillna(0, inplace=True)
+        df['terminadas_actual'] = df.acum - df.en_curso - df.terminadas_ant
+        # df = df_alta >>\
+        #     dplyr.left_join(df_anos) >>\
+        #     dplyr.left_join(df_acum) >>\
+        #     dplyr.left_join(df_curso) >>\
+        #     dplyr.left_join(df_term_ant) >>\
+        #     tidyr.replace_na(0) >>\
+        #     dplyr.mutate(
+        #         terminadas_actual = f.acum - f.en_curso - f.terminadas_ant)
         df = pd.DataFrame(df)
         df.reset_index(drop=True, inplace=True)
         return df
