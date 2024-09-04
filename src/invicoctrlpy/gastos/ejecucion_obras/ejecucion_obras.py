@@ -11,6 +11,8 @@ Packages:
  - invicoctrlpy (pip install -e '/home/kanou/IT/R Apps/R Gestion INVICO/invicoctrlpy')
 """
 
+__all__ = ["EjecucionObras"]
+
 import datetime as dt
 import os
 from dataclasses import dataclass, field
@@ -386,7 +388,8 @@ class EjecucionObras(ImportDataFrame):
         self, es_desc_siif:bool = True,
         ultimos_ejercicios:str = 'All',
         desagregar_partida:bool = True,
-        agregar_acum_2008:bool = True):
+        agregar_acum_2008:bool = True,
+        date_up_to:dt.date = None):
         df = self.import_icaro_carga_desc(es_desc_siif=es_desc_siif)
         df.sort_values(["actividad", "partida", "fuente"], inplace=True)
         group_cols = [
@@ -398,6 +401,12 @@ class EjecucionObras(ImportDataFrame):
 
         # Eliminamos aquellos ejercicios anteriores a 2009
         df = df.loc[df.ejercicio.astype(int) >= 2009]
+
+        # Filtramos hasta una fecha máxima
+        if date_up_to:
+            date_up_to = np.datetime64(date_up_to)
+            df = df.loc[df['fecha'] <= date_up_to]
+
         # Agregamos ejecución acumulada de Patricia
         if agregar_acum_2008:
             df_acum_2008 = self.import_acum_2008()
