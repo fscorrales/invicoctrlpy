@@ -161,14 +161,26 @@ class EjecucionObras(ImportDataFrame):
 
     # --------------------------------------------------
     def import_icaro_carga_desc(
-        self, es_desc_siif:bool = True
-    ):
-        df = super().import_icaro_carga(neto_pa6=True)
-        df = df.loc[df['partida'].isin(['421', '422'])]
-        if isinstance(self.ejercicio, list):
-            df = df.loc[df['ejercicio'].isin(self.ejercicio)]
+        self, es_desc_siif:bool = True, 
+        ejercicio_to:bool = True,
+        neto_pa6:bool = True
+    ):  
+        if ejercicio_to:
+            df = super().import_icaro_carga(
+                neto_pa6=neto_pa6,
+                neto_reg=not neto_pa6
+            )
+            df = df.loc[df['partida'].isin(['421', '422'])]
+            if isinstance(self.ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(self.ejercicio)]
+            else:
+                df = df.loc[df.ejercicio.astype(int) <= int(self.ejercicio)]
         else:
-            df = df.loc[df.ejercicio.astype(int) <= int(self.ejercicio)]
+            df = super().import_icaro_carga(
+                ejercicio=self.ejercicio,
+                neto_pa6=neto_pa6,
+                neto_reg=not neto_pa6
+            )
         if es_desc_siif:
             df['estructura'] = df['actividad'] + '-' + df['partida']
             df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
@@ -389,7 +401,9 @@ class EjecucionObras(ImportDataFrame):
         ultimos_ejercicios:str = 'All',
         desagregar_partida:bool = True,
         agregar_acum_2008:bool = True,
-        date_up_to:dt.date = None):
+        date_up_to:dt.date = None,
+        include_pa6:bool = False):
+
         df = self.import_icaro_carga_desc(es_desc_siif=es_desc_siif)
         df.sort_values(["actividad", "partida", "fuente"], inplace=True)
         group_cols = [
@@ -402,10 +416,21 @@ class EjecucionObras(ImportDataFrame):
         # Eliminamos aquellos ejercicios anteriores a 2009
         df = df.loc[df.ejercicio.astype(int) >= 2009]
 
+        # Incluimos PA6 (ultimo ejercicio)
+        if include_pa6:
+            df = df.loc[df.ejercicio.astype(int) < int(self.ejercicio)]
+            df_last = self.import_icaro_carga_desc(
+                es_desc_siif=es_desc_siif,
+                ejercicio_to=False,
+                neto_pa6=False
+            )
+            df = pd.concat([df, df_last], axis=0)
+
         # Filtramos hasta una fecha máxima
         if date_up_to:
             date_up_to = np.datetime64(date_up_to)
             df = df.loc[df['fecha'] <= date_up_to]
+
 
         # Agregamos ejecución acumulada de Patricia
         if agregar_acum_2008:
