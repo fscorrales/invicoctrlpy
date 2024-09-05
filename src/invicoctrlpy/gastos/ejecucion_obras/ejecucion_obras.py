@@ -170,7 +170,6 @@ class EjecucionObras(ImportDataFrame):
                 neto_pa6=neto_pa6,
                 neto_reg=not neto_pa6
             )
-            df = df.loc[df['partida'].isin(['421', '422'])]
             if isinstance(self.ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(self.ejercicio)]
             else:
@@ -181,6 +180,7 @@ class EjecucionObras(ImportDataFrame):
                 neto_pa6=neto_pa6,
                 neto_reg=not neto_pa6
             )
+        df = df.loc[df['partida'].isin(['421', '422'])]
         if es_desc_siif:
             df['estructura'] = df['actividad'] + '-' + df['partida']
             df = df.merge(self.siif_desc_pres, how='left', on='estructura', copy=False)
