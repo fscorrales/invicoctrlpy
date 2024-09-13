@@ -85,6 +85,7 @@ class EjecucionObras(ImportDataFrame):
             np.nan
         )
         df['desc_prog'] = df['desc_prog'].ffill()
+        df['desc_subprog'] = df['subprog'] + " - --" 
         df['desc_proy'] = np.where(
             df['obra'].isna(), 
             df['proy'] + " - " +  df['Descripción'],
@@ -99,7 +100,7 @@ class EjecucionObras(ImportDataFrame):
         df = df.dropna(subset=['estructura'])
         df['acum_2008'] = df['acum_2008'].astype(float)
         df = df.loc[:, [
-            'desc_prog', 'desc_proy', 'desc_act', 
+            'desc_prog', 'desc_subprog', 'desc_proy', 'desc_act', 
             'actividad', 'partida', 'estructura', 'alta', 'acum_2008'
         ]]
         return df
@@ -398,6 +399,7 @@ class EjecucionObras(ImportDataFrame):
    # --------------------------------------------------
     def reporte_planillometro_contabilidad(
         self, es_desc_siif:bool = True,
+        incluir_desc_subprog:bool = False,
         ultimos_ejercicios:str = 'All',
         desagregar_partida:bool = True,
         agregar_acum_2008:bool = True,
@@ -406,9 +408,13 @@ class EjecucionObras(ImportDataFrame):
 
         df = self.import_icaro_carga_desc(es_desc_siif=es_desc_siif)
         df.sort_values(["actividad", "partida", "fuente"], inplace=True)
-        group_cols = [
-            "desc_prog", "desc_proy", "desc_act",
-            "actividad"
+        
+        # Grupos de columnas
+        group_cols = ["desc_prog"]
+        if incluir_desc_subprog:
+            group_cols = group_cols + ['desc_subprog']
+        group_cols = group_cols + [
+            "desc_proy", "desc_act", "actividad"
         ]
         if desagregar_partida:
             group_cols = group_cols + ['partida']
@@ -443,10 +449,16 @@ class EjecucionObras(ImportDataFrame):
             df_dif = df_acum_2008.loc[
                 df_acum_2008['estructura'].isin(df['estructura'].unique().tolist())
             ]
-            df_dif = df_dif.drop(columns=['desc_prog', 'desc_proy', 'desc_act'])
+            df_dif = df_dif.drop(columns=[
+                'desc_prog', 'desc_subprog','desc_proy', 'desc_act'
+            ])
+            if incluir_desc_subprog:
+                columns_to_merge = ['estructura', 'desc_prog', 'desc_subprog','desc_proy', 'desc_act']
+            else:
+                columns_to_merge = ['estructura', 'desc_prog', 'desc_proy', 'desc_act']
             df_dif = pd.merge(
                 df_dif, 
-                df.loc[:, ['estructura', 'desc_prog', 'desc_proy', 'desc_act']].drop_duplicates(), 
+                df.loc[:, columns_to_merge].drop_duplicates(), 
                 on=['estructura'], how='left'
             )
             df = df.drop(columns=['estructura'])
