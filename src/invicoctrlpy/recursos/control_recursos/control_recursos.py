@@ -12,6 +12,8 @@ Packages:
  - invicoctrlpy (pip install -e '/home/kanou/IT/R Apps/R Gestion INVICO/invicoctrlpy')
 """
 
+__all__ = ['ControlRecursos']
+
 from dataclasses import dataclass
 
 import numpy as np
