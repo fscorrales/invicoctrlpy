@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
-from invicodb.update import update_db
+# from invicodb.update import update_db
 
 
 # --------------------------------------------------
@@ -30,41 +30,42 @@ class IcaroVsSIIF(ImportDataFrame):
     ejercicio:str = str(dt.datetime.now().year)
     input_path:str = None
     db_path:str = None
-    update_db:bool = False
+    # update_db:bool = False
 
     # --------------------------------------------------
     def __post_init__(self):
         if self.db_path == None:
             self.get_db_path()
-        if self.update_db:
-            self.update_sql_db()
+        # if self.update_db:
+        #     self.update_sql_db()
         self.import_dfs()
 
     # --------------------------------------------------
     def update_sql_db(self):
-        if self.input_path == None:
-            update_path_input = self.get_update_path_input()
-        else:
-            update_path_input = self.input_path
+        pass
+        # if self.input_path == None:
+        #     update_path_input = self.get_update_path_input()
+        # else:
+        #     update_path_input = self.input_path
         
-        update_siif = update_db.UpdateSIIF(
-            update_path_input + '/Reportes SIIF', 
-            self.db_path + '/siif.sqlite')
-        update_siif.update_ppto_gtos_fte_rf602()
-        update_siif.update_comprobantes_gtos_gpo_part_gto_rpa03g()
-        update_siif.update_comprobantes_gtos_rcg01_uejp()
-        update_siif.update_resumen_fdos_rfondo07tp()
+        # update_siif = update_db.UpdateSIIF(
+        #     update_path_input + '/Reportes SIIF', 
+        #     self.db_path + '/siif.sqlite')
+        # update_siif.update_ppto_gtos_fte_rf602()
+        # update_siif.update_comprobantes_gtos_gpo_part_gto_rpa03g()
+        # update_siif.update_comprobantes_gtos_rcg01_uejp()
+        # update_siif.update_resumen_fdos_rfondo07tp()
 
-        update_sscc = update_db.UpdateSSCC(
-            update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
-            self.db_path + '/sscc.sqlite')
-        update_sscc.update_ctas_ctes()
+        # update_sscc = update_db.UpdateSSCC(
+        #     update_path_input + '/Sistema de Seguimiento de Cuentas Corrientes', 
+        #     self.db_path + '/sscc.sqlite')
+        # update_sscc.update_ctas_ctes()
 
-        update_icaro = update_db.UpdateIcaro(
-            os.path.dirname(os.path.dirname(self.db_path))
-            + '/R Output/SQLite Files/ICARO.sqlite', 
-            self.db_path + '/icaro.sqlite')
-        update_icaro.migrate_icaro()
+        # update_icaro = update_db.UpdateIcaro(
+        #     os.path.dirname(os.path.dirname(self.db_path))
+        #     + '/R Output/SQLite Files/ICARO.sqlite', 
+        #     self.db_path + '/icaro.sqlite')
+        # update_icaro.migrate_icaro()
 
     # --------------------------------------------------
     def import_dfs(self):
