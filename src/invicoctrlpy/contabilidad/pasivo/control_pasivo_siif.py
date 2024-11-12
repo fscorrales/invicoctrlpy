@@ -11,12 +11,10 @@ Packages:
 """
 
 import datetime as dt
-import os
 from dataclasses import dataclass, field
 from typing import List
 
 import pandas as pd
-import numpy as np
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 from invicoctrlpy.recursos.control_recursos.control_recursos import ControlRecursos
 from invicoctrlpy.gastos.control_obras.control_obras import ControlObras
@@ -87,7 +85,7 @@ class ControlPasivo(ImportDataFrame):
         Returns:
             None
         """
-        if self.db_path == None:
+        if self.db_path is None:
             self.get_db_path()
         if self.update_db:
             self.update_sql_db()
@@ -106,7 +104,7 @@ class ControlPasivo(ImportDataFrame):
         Returns:
             None
         """
-        if self.input_path == None:
+        if self.input_path is None:
             update_path_input = self.get_update_path_input()
         else:
             update_path_input = self.input_path

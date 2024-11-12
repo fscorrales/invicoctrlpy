@@ -1,4 +1,3 @@
-import datetime as dt
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -56,7 +55,7 @@ class ImportDataFrame(HanglingPath):
     def import_slave(self, ejercicio:str = None) -> pd.DataFrame:
         df = MigrateSlave().from_sql(
             self.db_path + '/slave.sqlite', 'honorarios_factureros')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -90,7 +89,7 @@ class ImportDataFrame(HanglingPath):
                         neto_pa6:bool = False,
                         neto_reg:bool = False) -> pd.DataFrame:
         df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'carga')  
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -115,7 +114,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_icaro_obras(self) -> pd.DataFrame:
         df = MigrateIcaro().from_sql(self.db_path + '/icaro.sqlite', 'obras')  
-        return self.df
+        return df
 
     # --------------------------------------------------
     def import_icaro_carga_neto_rdeu(self, ejercicio:str) -> pd.DataFrame:
@@ -162,7 +161,7 @@ class ImportDataFrame(HanglingPath):
 
         # Incorporamos los comprobantes de gastos pagados 
         # en periodos posteriores (Deuda Flotante)
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 rdeu = rdeu.loc[rdeu['ejercicio'].isin(ejercicio)]
             else:
@@ -218,7 +217,7 @@ class ImportDataFrame(HanglingPath):
         #     ) >> \
         #     dplyr.bind_rows(icaro_carga_neto_rdeu) 
         # df = pd.DataFrame(rdeu)
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -248,13 +247,13 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_rdeu012(self, ejercicio:str = None) -> pd.DataFrame:
         df = DeudaFlotanteRdeu012().from_sql(self.db_path + '/siif.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
                 df = df.loc[df['ejercicio'].isin([ejercicio])]
         df.reset_index(drop=True, inplace=True)
-        map_to = self.ctas_ctes.loc[:,['map_to', 'siif_contabilidad_cta_cte']]
+        map_to = self.import_ctas_ctes().loc[:,['map_to', 'siif_contabilidad_cta_cte']]
         df = pd.merge(
             df, map_to, how='left',
             left_on='cta_cte', right_on='siif_contabilidad_cta_cte')
@@ -268,7 +267,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_rdeu012b2_c(self, mes_hasta:str = None) -> pd.DataFrame:
         df = DeudaFlotanteRdeu012b2C().from_sql(self.db_path + '/siif.sqlite')
-        if mes_hasta != None:
+        if mes_hasta is not None:
             df = df.loc[df['mes_hasta'] == mes_hasta]
         df.reset_index(drop=True, inplace=True)
         return df
@@ -276,7 +275,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_rf602(self, ejercicio:str = None) -> pd.DataFrame:
         df = PptoGtosFteRf602().from_sql(self.db_path + '/siif.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -287,7 +286,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_rfp_p605b(self, ejercicio:str = None) -> pd.DataFrame:
         df = FormGtoRfpP605b().from_sql(self.db_path + '/siif.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -300,7 +299,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_desc_pres(self, ejercicio_to:str = None) -> pd.DataFrame:
         df = PptoGtosDescRf610().from_sql(self.db_path + '/siif.sqlite')
-        if ejercicio_to != None:
+        if ejercicio_to is not None:
             if isinstance(ejercicio_to, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio_to)]
             else:
@@ -347,7 +346,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_ppto_gto_con_desc(self, ejercicio:str = None) -> pd.DataFrame:
         df = JoinPptoGtosFteDesc().from_sql(self.db_path + '/siif.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -359,7 +358,7 @@ class ImportDataFrame(HanglingPath):
         df = ResumenFdosRfondo07tp().from_sql(self.db_path + '/siif.sqlite')
         # if ejercicio != None:
         #     df = df.loc[df['ejercicio'] == ejercicio]
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -371,7 +370,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_rcg01_uejp(self, ejercicio:str = None) -> pd.DataFrame:
         df = ComprobantesGtosRcg01Uejp().from_sql(self.db_path + '/siif.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -389,7 +388,7 @@ class ImportDataFrame(HanglingPath):
     def import_siif_comprobantes(self, ejercicio:list = None) -> pd.DataFrame:
         df = JoinComprobantesGtosGpoPart().from_sql(
             self.db_path + '/siif.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -409,7 +408,7 @@ class ImportDataFrame(HanglingPath):
         ) -> pd.DataFrame:
         self.import_siif_comprobantes(ejercicio=ejercicio)
         df = self.siif_comprobantes.copy()
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -589,7 +588,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_rci02(self, ejercicio:str = None) -> pd.DataFrame:
         df = ComprobantesRecRci02().from_sql(self.db_path + '/siif.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -608,7 +607,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_siif_ri102(self, ejercicio:str = None) -> pd.DataFrame:
         df = PptoRecRi102().from_sql(self.db_path + '/siif.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -622,12 +621,12 @@ class ImportDataFrame(HanglingPath):
     def import_siif_rcocc31(
         self, ejercicio:str = None, cta_contable:str = None) -> pd.DataFrame:
         df = MayorContableRcocc31().from_sql(self.db_path + '/siif.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
                 df = df.loc[df['ejercicio'].isin([ejercicio])]
-        if cta_contable != None:
+        if cta_contable is not None:
             df = df.loc[df['cta_contable'] == cta_contable]
         df.reset_index(drop=True, inplace=True)
         # map_to = self.ctas_ctes.loc[:,['map_to', 'siif_contabilidad_cta_cte']]
@@ -642,7 +641,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_resumen_rend(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenRendProv().from_sql(self.db_path + '/sgf.sqlite')  
-        if ejercicio != None:
+        if ejercicio is not None:
             df = df.loc[df['ejercicio'] == ejercicio]
         df.reset_index(drop=True, inplace=True)
         map_to = self.ctas_ctes.loc[:,['map_to', 'sgf_cta_cte']]
@@ -677,7 +676,7 @@ class ImportDataFrame(HanglingPath):
     def import_resumen_rend_cuit(
         self, ejercicio:str = None, neto_cert_neg:bool=False) -> pd.DataFrame:
         df = JoinResumenRendProvCuit().from_sql(self.db_path + '/sgf.sqlite')  
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -764,7 +763,7 @@ class ImportDataFrame(HanglingPath):
         df = df.loc[df['cta_cte'].isin(['130832-05', '130832-07'])]
         df = df.loc[df['destino'].isin(['HONORARIOS - FUNCIONAMIENTO', 
         'COMISIONES - FUNCIONAMIENTO', 'HONORARIOS - EPAM'])]
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -801,7 +800,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_banco_invico(self, ejercicio:str = None) -> pd.DataFrame:
         df = BancoINVICO().from_sql(self.db_path + '/sscc.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -821,7 +820,7 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_sdo_final_banco_invico(self, ejercicio:str = None) -> pd.DataFrame:
         df = SdoFinalBancoINVICO().from_sql(self.db_path + '/sscc.sqlite')
-        if ejercicio != None:
+        if ejercicio is not None:
             if isinstance(ejercicio, list):
                 df = df.loc[df['ejercicio'].isin(ejercicio)]
             else:
@@ -838,56 +837,56 @@ class ImportDataFrame(HanglingPath):
     # --------------------------------------------------
     def import_barrios_nuevos(self, ejercicio:str = None) -> pd.DataFrame:
         df = BarriosNuevos().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
+        if ejercicio is not None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
 
     # --------------------------------------------------
     def import_resumen_facturado(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenFacturado().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
+        if ejercicio is not None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
 
     # --------------------------------------------------
     def import_resumen_recaudado(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenRecaudado().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
+        if ejercicio is not None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
 
     # --------------------------------------------------
     def import_saldo_barrio_variacion(self, ejercicio:str = None) -> pd.DataFrame:
         df = SaldoBarrioVariacion().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
+        if ejercicio is not None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
 
     # --------------------------------------------------
     def import_saldo_barrio(self, ejercicio:str = None) -> pd.DataFrame:
         df = SaldoBarrio().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
+        if ejercicio is not None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
 
     # --------------------------------------------------
     def import_saldo_recuperos_cobrar_variacion(self, ejercicio:str = None) -> pd.DataFrame:
         df = SaldoRecuperosCobrarVariacion().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
+        if ejercicio is not None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
     
     # --------------------------------------------------
     def import_saldo_motivo_por_barrio(self, ejercicio:str = None) -> pd.DataFrame:
         df = SaldoMotivoPorBarrio().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
+        if ejercicio is not None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
 
     # --------------------------------------------------
     def import_saldo_motivo(self, ejercicio:str = None) -> pd.DataFrame:
         df = SaldoMotivo().from_sql(self.db_path + '/sgv.sqlite') 
-        if ejercicio != None:
+        if ejercicio is not None:
             df = df.loc[df['ejercicio'] <= ejercicio]
         return df
 
