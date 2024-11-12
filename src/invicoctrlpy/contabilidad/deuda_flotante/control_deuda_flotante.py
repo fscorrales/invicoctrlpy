@@ -3,11 +3,8 @@
 Author: Fernando Corrales <fscpython@gmail.com>
 Purpose: Control Deuda Flontante (balance)
 Data required:
-    - SIIF rcg01_uejp
-    - SIIF gto_rpa03g
-    - SIIF rcocc31 (2122-1-2)
-    - SIIF rdeu
-    - SSCC Resumen General de Movimientos
+    - SIIF rcocc31 (2000)
+    - SIIF rdeu012
     - SSCC ctas_ctes (manual data)
 Packages:
  - invicodatpy (pip install '/home/kanou/IT/R Apps/R Gestion INVICO/invicodatpy')
