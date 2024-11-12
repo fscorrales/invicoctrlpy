@@ -46,6 +46,7 @@ def rdeu012_with_accounting(ejercicios:[str] = None, db_path:str = None) -> Cont
         rcocc31 = import_siif_rcocc31_liabilities(ejercicio=ejercicio, import_df=import_df)
         rcocc31 = rcocc31_in_rdue012(ejercicio=ejercicio, rdeu=rdeu, rcocc31=rcocc31)
         rdeu['ejercicio_contable'] = ejercicio
+        rdeu = rdeu[['ejercicio_contable'] + [col for col in rdeu.columns if col != 'ejercicio_contable']]
         ctrl_rdeu.rdeu012 = pd.concat(
             [ctrl_rdeu.rdeu012, rdeu]
         )
