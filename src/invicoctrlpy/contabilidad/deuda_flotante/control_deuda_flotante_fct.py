@@ -39,6 +39,7 @@ def rdeu012_with_accounting(ejercicios:[str] = None, db_path:str = None) -> Cont
         ejercicios = [ejercicios]
     if not db_path:
         db_path = handle_path.get_db_path()
+    ejercicios = sorted([str(ejercicio) for ejercicio in ejercicios], key=lambda x: int(x))
     ctrl_rdeu = ControlDeudaFlotante(ejercicios=ejercicios)
     import_df = set_import_df_db_path(db_path=db_path)
     for ejercicio in ejercicios:
@@ -53,17 +54,31 @@ def rdeu012_with_accounting(ejercicios:[str] = None, db_path:str = None) -> Cont
         ctrl_rdeu.rcocc31 = pd.concat(
             [ctrl_rdeu.rcocc31, rcocc31]
         )
-    rdeu = import_siif_last_rdeu012(ejercicio=max(ejercicios), import_df=import_df)
-    ctrl_rdeu.rdeu012_last = rdeu
-    rdeu = rdeu.loc[
-        :, [
-            'ejercicio', 'fuente', 'cta_cte', 'nro_original', 
-            'saldo_rdeu', 'cuit', 'glosa', 'nro_expte'
+        rdeu = rdeu.loc[
+            :, [
+                'ejercicio_contable','ejercicio', 'fuente', 'cta_cte', 'nro_original', 
+                'saldo_rdeu', 'cuit', 'glosa', 'nro_expte'
+            ]
         ]
-    ]
-    ctrl_rdeu.rdeu_cta_contable = rdeu.merge(
-        ctrl_rdeu.rcocc31, how='left', on=['ejercicio', 'nro_original']
-    )
+        ctrl_rdeu.rdeu_cta_contable = pd.concat(
+            [
+                ctrl_rdeu.rdeu_cta_contable, 
+                rdeu.merge(
+                    ctrl_rdeu.rcocc31, how='left', on=['ejercicio', 'nro_original']
+                )
+            ]
+        )
+    # rdeu = import_siif_last_rdeu012(ejercicio=max(ejercicios), import_df=import_df)
+    # ctrl_rdeu.rdeu012_last = rdeu
+    # rdeu = rdeu.loc[
+    #     :, [
+    #         'ejercicio', 'fuente', 'cta_cte', 'nro_original', 
+    #         'saldo_rdeu', 'cuit', 'glosa', 'nro_expte'
+    #     ]
+    # ]
+    # ctrl_rdeu.rdeu_cta_contable = rdeu.merge(
+    #     ctrl_rdeu.rcocc31, how='left', on=['ejercicio', 'nro_original']
+    # )
     return ctrl_rdeu
 
 
@@ -109,7 +124,8 @@ def rcocc31_in_rdue012(rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -
 
 # --------------------------------------------------
 if __name__ == '__main__':
-    ctrl_rdeu = rdeu012_with_accounting(ejercicios=['2022','2023'])
+    ejercicios = [str(x) for x in range(2010, 2025)]
+    ctrl_rdeu = rdeu012_with_accounting(ejercicios=ejercicios)
     print(ctrl_rdeu.rdeu_cta_contable)
 
 # python -m invicoctrlpy.contabilidad.deuda_flotante.control_deuda_flotante_fct
