@@ -26,7 +26,6 @@ class ControlDeudaFlotante(BaseModel):
     ejercicios:list[str] = None
     rcocc31:pd.DataFrame = pd.DataFrame()
     rdeu012:pd.DataFrame = pd.DataFrame()
-    rdeu012_last:pd.DataFrame = pd.DataFrame()
     rdeu_cta_contable:pd.DataFrame = pd.DataFrame()
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -45,14 +44,14 @@ def rdeu012_with_accounting(ejercicios:[str] = None, db_path:str = None) -> Cont
     for ejercicio in ejercicios:
         rdeu = import_siif_last_rdeu012(ejercicio=ejercicio, import_df=import_df)
         rcocc31 = import_siif_rcocc31_liabilities(ejercicio=ejercicio, import_df=import_df)
-        rcocc31 = rcocc31_in_rdue012(ejercicio=ejercicio, rdeu=rdeu, rcocc31=rcocc31)
+        filter_rcocc31 = rcocc31_in_rdue012(ejercicio=ejercicio, rdeu=rdeu, rcocc31=rcocc31)
         rdeu['ejercicio_contable'] = ejercicio
         rdeu = rdeu[['ejercicio_contable'] + [col for col in rdeu.columns if col != 'ejercicio_contable']]
         ctrl_rdeu.rdeu012 = pd.concat(
             [ctrl_rdeu.rdeu012, rdeu]
         )
         ctrl_rdeu.rcocc31 = pd.concat(
-            [ctrl_rdeu.rcocc31, rcocc31]
+            [ctrl_rdeu.rcocc31, filter_rcocc31]
         )
         rdeu = rdeu.loc[
             :, [
@@ -68,6 +67,8 @@ def rdeu012_with_accounting(ejercicios:[str] = None, db_path:str = None) -> Cont
                 )
             ]
         )
+        aju = aju_not_in_rdue012(filter_rdeu=rdeu, rcocc31=rcocc31)
+        ctrl_rdeu.rdeu_cta_contable = pd.concat([ctrl_rdeu.rdeu_cta_contable, aju])
     # rdeu = import_siif_last_rdeu012(ejercicio=max(ejercicios), import_df=import_df)
     # ctrl_rdeu.rdeu012_last = rdeu
     # rdeu = rdeu.loc[
@@ -107,7 +108,7 @@ def import_siif_last_rdeu012(ejercicio:str, import_df:ImportDataFrame) -> pd.Dat
 
 # --------------------------------------------------
 def import_siif_rcocc31_liabilities(ejercicio:str, import_df:ImportDataFrame):
-    tipos_comprobantes = ['CAO', 'CAP', 'CAM', 'CAD', 'ANP']
+    tipos_comprobantes = ['CAO', 'CAP', 'CAM', 'CAD', 'ANP', 'AJU']
     df = import_df.import_siif_rcocc31(ejercicio=ejercicio)
     df = df.loc[df['cta_contable'].str.startswith('2'), :]
     df = df.loc[df['tipo_comprobante'].isin(tipos_comprobantes), :]
@@ -122,10 +123,22 @@ def rcocc31_in_rdue012(rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -
     df = rcocc31.loc[rcocc31['nro_original'].isin(cyo)]
     return df
 
+
+# --------------------------------------------------
+def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame) -> pd.DataFrame:
+    aju = rcocc31.loc[rcocc31['tipo_comprobante'] == 'AJU']
+    df = pd.DataFrame(columns=filter_rdeu.columns)
+    df = df.drop(columns=['ejercicio', 'nro_original'])
+    df = pd.concat([df, aju], axis=1)
+    df['fuente'] = '11'
+    df['saldo_rdeu'] = df['saldo_contable'] * (-1)
+    return df   
+
+
 # --------------------------------------------------
 if __name__ == '__main__':
     ejercicios = [str(x) for x in range(2010, 2025)]
-    ctrl_rdeu = rdeu012_with_accounting(ejercicios=ejercicios)
+    ctrl_rdeu = rdeu012_with_accounting(ejercicios=['2022', '2023'])
     print(ctrl_rdeu.rdeu_cta_contable)
 
 # python -m invicoctrlpy.contabilidad.deuda_flotante.control_deuda_flotante_fct
