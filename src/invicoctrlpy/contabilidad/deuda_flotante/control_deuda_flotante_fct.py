@@ -67,19 +67,9 @@ def rdeu012_with_accounting(ejercicios:[str] = None, db_path:str = None) -> Cont
                 )
             ]
         )
-        aju = aju_not_in_rdue012(filter_rdeu=rdeu, rcocc31=rcocc31)
+        aju = aju_not_in_rdue012(filter_rdeu=rdeu, rcocc31=ctrl_rdeu.rcocc31, ejercicio=ejercicio)
         ctrl_rdeu.rdeu_cta_contable = pd.concat([ctrl_rdeu.rdeu_cta_contable, aju])
-    # rdeu = import_siif_last_rdeu012(ejercicio=max(ejercicios), import_df=import_df)
-    # ctrl_rdeu.rdeu012_last = rdeu
-    # rdeu = rdeu.loc[
-    #     :, [
-    #         'ejercicio', 'fuente', 'cta_cte', 'nro_original', 
-    #         'saldo_rdeu', 'cuit', 'glosa', 'nro_expte'
-    #     ]
-    # ]
-    # ctrl_rdeu.rdeu_cta_contable = rdeu.merge(
-    #     ctrl_rdeu.rcocc31, how='left', on=['ejercicio', 'nro_original']
-    # )
+
     return ctrl_rdeu
 
 
@@ -120,16 +110,19 @@ def rcocc31_in_rdue012(rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -
     rdeu = rdeu.loc[rdeu['ejercicio'] == ejercicio, :]
     cyo = rdeu.loc[rdeu['ejercicio'] == ejercicio]['nro_comprobante'].tolist()
     cyo = list(map(lambda x: str(int(x[:-3])), cyo))
+    aju = rcocc31.loc[rcocc31['tipo_comprobante'] == 'AJU']
     df = rcocc31.loc[rcocc31['nro_original'].isin(cyo)]
+    df = pd.concat([df, aju])
     return df
 
 
 # --------------------------------------------------
-def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame) -> pd.DataFrame:
+def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -> pd.DataFrame:
     aju = rcocc31.loc[rcocc31['tipo_comprobante'] == 'AJU']
     df = pd.DataFrame(columns=filter_rdeu.columns)
     df = df.drop(columns=['ejercicio', 'nro_original'])
     df = pd.concat([df, aju], axis=1)
+    df['ejercicio_contable'] = ejercicio
     df['fuente'] = '11'
     df['saldo_rdeu'] = df['saldo_contable'] * (-1)
     return df   
