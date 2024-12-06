@@ -14,10 +14,10 @@ Packages:
 __all__ = ['rdeu012_with_accounting']
 
 import datetime as dt
-import pandas as pd
 
-from invicoctrlpy.utils.import_dataframe import ImportDataFrame
+import pandas as pd
 from invicoctrlpy.utils import handle_path
+from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 from pydantic import BaseModel, ConfigDict
 
 
@@ -119,6 +119,10 @@ def rcocc31_in_rdue012(rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -
 # --------------------------------------------------
 def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -> pd.DataFrame:
     aju = rcocc31.loc[rcocc31['tipo_comprobante'] == 'AJU']
+    filtered_aju = aju.groupby('nro_original').sum()['saldo_contable']
+    filtered_aju = filtered_aju[abs(filtered_aju) > 0.1]
+    aju = aju.merge(filtered_aju.reset_index()['nro_original'], on='nro_original', how='left')
+    print(aju.head())
     df = pd.DataFrame(columns=filter_rdeu.columns)
     df = df.drop(columns=['ejercicio', 'nro_original'])
     df = pd.concat([df, aju], axis=1)
@@ -131,7 +135,7 @@ def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio
 # --------------------------------------------------
 if __name__ == '__main__':
     ejercicios = [str(x) for x in range(2010, 2025)]
-    ctrl_rdeu = rdeu012_with_accounting(ejercicios=['2022', '2023'])
+    ctrl_rdeu = rdeu012_with_accounting(ejercicios=['2012'])
     print(ctrl_rdeu.rdeu_cta_contable)
 
 # python -m invicoctrlpy.contabilidad.deuda_flotante.control_deuda_flotante_fct
