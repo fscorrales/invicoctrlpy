@@ -121,7 +121,7 @@ def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio
     aju = rcocc31.loc[rcocc31['tipo_comprobante'] == 'AJU']
     filtered_aju = aju.groupby('nro_original').sum()['saldo_contable']
     filtered_aju = filtered_aju[abs(filtered_aju) > 0.1]
-    aju = aju.merge(filtered_aju.reset_index()['nro_original'], on='nro_original', how='left')
+    aju = aju.merge(filtered_aju.reset_index()['nro_original'], on='nro_original', how='right')
     df = pd.DataFrame(columns=filter_rdeu.columns)
     df = df.drop(columns=['ejercicio', 'nro_original'])
     df = pd.concat([df, aju], axis=1)
