@@ -119,9 +119,13 @@ def rcocc31_in_rdue012(rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -
 # --------------------------------------------------
 def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -> pd.DataFrame:
     aju = rcocc31.loc[rcocc31['tipo_comprobante'] == 'AJU']
+    aju['nro_comprobante'] = aju['nro_entrada'] + '/' + aju['ejercicio'].str[2:]
+    aju_keep = aju.loc[aju['nro_comprobante'].isin(['16536/11'])]
+    aju_keep = aju_keep.drop(columns=['nro_comprobante'])
     filtered_aju = aju.groupby('nro_original').sum()['saldo_contable']
     filtered_aju = filtered_aju[abs(filtered_aju) > 0.1]
     aju = aju.merge(filtered_aju.reset_index()['nro_original'], on='nro_original', how='right')
+    aju = pd.concat([aju, aju_keep], axis=0)
     df = pd.DataFrame(columns=filter_rdeu.columns)
     df = df.drop(columns=['ejercicio', 'nro_original'])
     df = pd.concat([df, aju], axis=1)
