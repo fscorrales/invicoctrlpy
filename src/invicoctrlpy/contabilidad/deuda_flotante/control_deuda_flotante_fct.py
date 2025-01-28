@@ -120,6 +120,9 @@ def rcocc31_in_rdue012(rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -
 def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -> pd.DataFrame:
     aju = rcocc31.loc[rcocc31['tipo_comprobante'] == 'AJU']
     aju['nro_comprobante'] = aju['nro_entrada'] + '/' + aju['ejercicio'].str[2:]
+    # Elimino comprobantes específicos (error en SIIF)
+    aju = aju.loc[~aju['nro_comprobante'].isin(['17097/13'])] # PAGO COMPR. CAO 5413/13. MAP 5429/13. ERROR SISTEMA
+    # Conservo los AJU con saldo mayor a 0.1 y el 16536/11
     aju_keep = aju.loc[aju['nro_comprobante'].isin(['16536/11'])]
     aju_keep = aju_keep.drop(columns=['nro_comprobante'])
     filtered_aju = aju.groupby('nro_original').sum()['saldo_contable']
