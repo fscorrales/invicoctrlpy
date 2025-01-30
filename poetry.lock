@@ -858,7 +858,7 @@ xlrd = "^2.0.1"
 type = "git"
 url = "https://github.com/fscorrales/invicodatpy.git"
 reference = "HEAD"
-resolved_reference = "1939a3904531d4001739d322f92c64a414e90be0"
+resolved_reference = "0ec31ec69d4378d0ddd3339320e3179413655eb7"
 
 [[package]]
 name = "ipykernel"
