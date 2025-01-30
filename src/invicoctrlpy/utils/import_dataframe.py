@@ -16,9 +16,10 @@ from invicodatpy.siif.all import (ComprobantesGtosRcg01Uejp,
                                   JoinComprobantesGtosGpoPart,
                                   JoinPptoGtosFteDesc, MayorContableRcocc31,
                                   PptoGtosDescRf610, PptoGtosFteRf602,
-                                  PptoRecRi102, ResumenFdosRfondo07tp, FormGtoRfpP605b)
+                                  PptoRecRi102, ResumenFdosRfondo07tp, FormGtoRfpP605b, 
+                                  ResumenContableCtaRvicon03)
 from invicodatpy.slave.migrate_slave import MigrateSlave
-from invicodatpy.sscc.all import BancoINVICO, CtasCtes, SdoFinalBancoINVICO
+from invicodatpy.sscc.all import BancoINVICO, CtasCtes, SdoFinalBancoINVICO, ListadoImputaciones
 from invicodatpy.sgo.all import ListadoObras
 
 from .hangling_path import HanglingPath
@@ -50,6 +51,13 @@ class ImportDataFrame(HanglingPath):
         df = CtasCtes().from_sql(self.db_path + '/sscc.sqlite') 
         self.ctas_ctes = df
         return self.ctas_ctes
+
+    # --------------------------------------------------
+    def import_sscc_listado_imputaciones(self) -> pd.DataFrame:
+        df = ListadoImputaciones().from_sql(self.db_path + '/sscc.sqlite') 
+        # self.ctas_ctes = df
+        # return self.ctas_ctes
+        return df
 
     # --------------------------------------------------
     def import_slave(self, ejercicio:str = None) -> pd.DataFrame:
@@ -639,6 +647,20 @@ class ImportDataFrame(HanglingPath):
         return self.siif_rcocc31
 
     # --------------------------------------------------
+    def import_siif_rvicon03(
+        self, ejercicio:str = None, cta_contable:str = None) -> pd.DataFrame:
+        df = ResumenContableCtaRvicon03().from_sql(self.db_path + '/siif.sqlite')
+        if ejercicio is not None:
+            if isinstance(ejercicio, list):
+                df = df.loc[df['ejercicio'].isin(ejercicio)]
+            else:
+                df = df.loc[df['ejercicio'].isin([ejercicio])]
+        # if cta_contable is not None:
+        #     df = df.loc[df['cta_contable'] == cta_contable]
+        df.reset_index(drop=True, inplace=True)
+        return df
+
+    # --------------------------------------------------
     def import_resumen_rend(self, ejercicio:str = None) -> pd.DataFrame:
         df = ResumenRendProv().from_sql(self.db_path + '/sgf.sqlite')  
         if ejercicio is not None:
@@ -816,6 +838,22 @@ class ImportDataFrame(HanglingPath):
         df.drop(['map_to', 'sscc_cta_cte'], axis='columns', inplace=True)
         self.sscc_banco_invico = df
         return self.sscc_banco_invico
+
+    # --------------------------------------------------
+    def import_banco_siif(self, ejercicio:str = None) -> pd.DataFrame:
+        df = self.import_siif_rcocc31(
+            ejercicio = self.ejercicio, cta_contable = '1112-2-6'
+        )
+        df = df.rename(columns={
+            'auxiliar_1': 'cta_cte'
+        })
+        map_to = self.ctas_ctes.loc[:,['map_to', 'siif_contabilidad_cta_cte']]
+        df = pd.merge(
+            df, map_to, how='left',
+            left_on='cta_cte', right_on='siif_contabilidad_cta_cte')
+        df['cta_cte'] = df['map_to']
+        df.drop(['map_to', 'siif_contabilidad_cta_cte'], axis='columns', inplace=True)
+        return df
 
     # --------------------------------------------------
     def import_sdo_final_banco_invico(self, ejercicio:str = None) -> pd.DataFrame:

@@ -27,6 +27,7 @@ class ControlDeudaFlotante(BaseModel):
     rcocc31:pd.DataFrame = pd.DataFrame()
     rdeu012:pd.DataFrame = pd.DataFrame()
     rdeu_cta_contable:pd.DataFrame = pd.DataFrame()
+    rvicon03:pd.DataFrame = pd.DataFrame()
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
@@ -69,6 +70,9 @@ def rdeu012_with_accounting(ejercicios:[str] = None, db_path:str = None) -> Cont
         )
         aju = aju_not_in_rdue012(filter_rdeu=rdeu, rcocc31=ctrl_rdeu.rcocc31, ejercicio=ejercicio)
         ctrl_rdeu.rdeu_cta_contable = pd.concat([ctrl_rdeu.rdeu_cta_contable, aju])
+        ctrl_rdeu.rvicon03 = pd.concat(
+            [ctrl_rdeu.rvicon03, import_df.import_siif_rvicon03(ejercicio=ejercicio)]
+        )
 
     return ctrl_rdeu
 
@@ -93,6 +97,8 @@ def import_siif_last_rdeu012(ejercicio:str, import_df:ImportDataFrame) -> pd.Dat
     df = df.rename(
         columns={'nro_origen': 'nro_original', 'saldo': 'saldo_rdeu'},
     )
+    # Elimino comprobantes específicos (error en SIIF)
+    df = df.loc[~df['nro_comprobante'].isin(['02749/11'])] #No debería estar en la RDEU
     return df
 
 
@@ -105,12 +111,13 @@ def import_siif_rcocc31_liabilities(ejercicio:str, import_df:ImportDataFrame):
     df = df.rename(columns={'saldo': 'saldo_contable'})
     return df
 
+
 # --------------------------------------------------
 def rcocc31_in_rdue012(rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -> pd.DataFrame:
     rdeu = rdeu.loc[rdeu['ejercicio'] == ejercicio, :]
     cyo = rdeu.loc[rdeu['ejercicio'] == ejercicio]['nro_comprobante'].tolist()
     cyo = list(map(lambda x: str(int(x[:-3])), cyo))
-    aju = rcocc31.loc[rcocc31['tipo_comprobante'] == 'AJU']
+    aju = rcocc31.loc[rcocc31['tipo_comprobante'].isin(['AJU'])]
     df = rcocc31.loc[rcocc31['nro_original'].isin(cyo)]
     df = pd.concat([df, aju])
     return df
@@ -118,12 +125,21 @@ def rcocc31_in_rdue012(rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -
 
 # --------------------------------------------------
 def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -> pd.DataFrame:
-    aju = rcocc31.loc[rcocc31['tipo_comprobante'] == 'AJU']
+    aju = rcocc31.loc[rcocc31['tipo_comprobante'].isin(['AJU'])]
     aju['nro_comprobante'] = aju['nro_entrada'] + '/' + aju['ejercicio'].str[2:]
     # Elimino comprobantes específicos (error en SIIF)
+    aju = aju.loc[~aju['nro_comprobante'].isin(['16535/11'])] # AJUSTE DE SUELDOS Y SALARIOS A PAGAR
+    aju = aju.loc[~aju['nro_comprobante'].isin(['15793/12'])] # AJUSTES RETENCIONES. COMPROB.225/2012
+    aju = aju.loc[~aju['nro_comprobante'].isin(['17773/16'])] # ERROR PAGO COMPROBANTE GTOS. 2749/2011
+    aju = aju.loc[~aju['nro_comprobante'].isin(['17096/13'])] # REGISTROS PAGOS A.R.T. ENERO Y FEBRERO/2013
     aju = aju.loc[~aju['nro_comprobante'].isin(['17097/13'])] # PAGO COMPR. CAO 5413/13. MAP 5429/13. ERROR SISTEMA
+    aju = aju.loc[~aju['nro_comprobante'].isin(['19897/17'])] # AJUSTES DE LOS DRI DEL AÑO 2017. DEVOLUCIÓN RETENCIÓN IMP. GCIAS. 245
+    aju = aju.loc[~aju['nro_comprobante'].isin(['15142/21'])] # AJU SALIDA DE BANCO DEL DRI 497-10-09-2021
+    aju = aju.loc[~aju['nro_comprobante'].isin(['16986/24'])] # DEV RET INDEBIDAS IIBB- DRI 1348.AJUSTE CTA OTROS ANTICIPOS.
+
     # Conservo los AJU con saldo mayor a 0.1 y el 16536/11
     aju_keep = aju.loc[aju['nro_comprobante'].isin(['16536/11'])]
+    # aju_keep = aju_keep.append(aju[aju['tipo_comprobante'] == 'DRI'])
     aju_keep = aju_keep.drop(columns=['nro_comprobante'])
     filtered_aju = aju.groupby('nro_original').sum()['saldo_contable']
     filtered_aju = filtered_aju[abs(filtered_aju) > 0.1]
