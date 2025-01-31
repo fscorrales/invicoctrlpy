@@ -127,6 +127,13 @@ def rcocc31_in_rdue012(rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -
 def aju_not_in_rdue012(filter_rdeu:pd.DataFrame, rcocc31:pd.DataFrame, ejercicio:str) -> pd.DataFrame:
     aju = rcocc31.loc[rcocc31['tipo_comprobante'].isin(['AJU'])]
     aju['nro_comprobante'] = aju['nro_entrada'] + '/' + aju['ejercicio'].str[2:]
+    
+    # Elimino Amortizaciones Acum. del Pasivo (cta. contable empieza con 2241)
+    aju = aju.loc[~aju['cta_contable'].str.startswith('2241')]
+
+    # Elimino Otros Fondos de Terceros a Pagar (cta. contable 2113-2-9)
+    aju = aju.loc[~aju['cta_contable'].isin(['2113-2-9'])]
+
     # Elimino comprobantes específicos (error en SIIF)
     aju = aju.loc[~aju['nro_comprobante'].isin(['16535/11'])] # AJUSTE DE SUELDOS Y SALARIOS A PAGAR
     aju = aju.loc[~aju['nro_comprobante'].isin(['15793/12'])] # AJUSTES RETENCIONES. COMPROB.225/2012
