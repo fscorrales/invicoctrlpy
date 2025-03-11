@@ -276,4 +276,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python -m src.invicoctrlpy.remanente.remanente_fct
+# python -m src.invicoctrlpy.remanente.remanente

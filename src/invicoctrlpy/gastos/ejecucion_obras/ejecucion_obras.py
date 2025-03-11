@@ -15,14 +15,35 @@ __all__ = ["EjecucionObras"]
 
 import datetime as dt
 import os
+import inspect
 from dataclasses import dataclass, field
 
 import pandas as pd
 import numpy as np
+import argparse
 
 from invicoctrlpy.utils.import_dataframe import ImportDataFrame
 # from invicodb.update import update_db
 
+# --------------------------------------------------
+def get_args():
+    """Get command-line arguments"""
+
+    parser = argparse.ArgumentParser(
+        description="Remanente y Mal Llamado Remanente",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "ejercicio",
+        metavar="ejercicio",
+        default=[dt.datetime.now().year],
+        type=int,
+        choices=range(2010, dt.datetime.now().year + 1),
+        help="Ejercicio Remamente",
+    )
+
+    return parser.parse_args()
 
 @dataclass
 # --------------------------------------------------
@@ -38,28 +59,7 @@ class EjecucionObras(ImportDataFrame):
     def __post_init__(self):
         if self.db_path == None:
             self.get_db_path()
-        # if self.update_db:
-        #     self.update_sql_db()
         self.import_dfs()
-
-    # --------------------------------------------------
-    # def update_sql_db(self):
-    #     if self.input_path == None:
-    #         update_path_input = self.get_update_path_input()
-    #     else:
-    #         update_path_input = self.input_path
-
-    #     update_icaro = update_db.UpdateIcaro(
-    #         os.path.dirname(os.path.dirname(self.db_path)) + 
-    #         '/R Output/SQLite Files/ICARO.sqlite', 
-    #         self.db_path + '/icaro.sqlite')
-    #     update_icaro.migrate_icaro()
-
-    #     update_siif = update_db.UpdateSIIF(
-    #         update_path_input + '/Reportes SIIF', 
-    #         self.db_path + '/siif.sqlite')
-    #     update_siif.update_ppto_gtos_fte_rf602()
-    #     update_siif.update_ppto_gtos_desc_rf610()
 
     # --------------------------------------------------
     def import_dfs(self):
@@ -538,3 +538,60 @@ class EjecucionObras(ImportDataFrame):
         df = df.rename(columns={'actividad':'estructura'})
         df = df.drop(columns=['partida'])
         return df
+
+# --------------------------------------------------
+def main():
+    """Make a jazz noise here"""
+
+    args = get_args()
+    ejercicio = str(args.ejercicio)
+
+    print(f'Ejercicio = "{ejercicio}"')
+
+    ejecucion_obras = EjecucionObras(ejercicio=ejercicio)
+
+    save_path = os.path.dirname(
+        os.path.abspath(inspect.getfile(inspect.currentframe()))
+    )
+
+    file_name = os.path.join(save_path, "Planillometro al " + ejercicio + ".xlsx")
+    with pd.ExcelWriter(file_name) as writer:
+        ejecucion_obras.reporte_siif_ejec_obras_actual().to_excel(
+            writer, sheet_name='EjecuccionSIIF' + ejercicio, index=False
+            )
+        ejecucion_obras.import_siif_obras_desc_icaro().to_excel(
+            writer, sheet_name='EjecuccionSIIFDescICARO' + ejercicio, index=False
+            )
+        ejecucion_obras.reporte_planillometro().to_excel(
+            writer, sheet_name='Planillometro', index=False
+            )
+        ejecucion_obras.reporte_planillometro(full_icaro=True, es_desc_siif=False).to_excel(
+            writer, sheet_name='PlanillometroFullIcaro', index=False
+            )
+        ejecucion_obras.reporte_planillometro_contabilidad(
+            ultimos_ejercicios=5, es_desc_siif=False, 
+            desagregar_partida=True, agregar_acum_2008=True,
+            date_up_to = dt.datetime(2024, 8, 31)).to_excel(
+                writer, sheet_name='PlanillometroResumido', index=False
+            )
+
+    file_name = os.path.join(save_path, "Módulos Básicos Ejecutados Hasta el " + ejercicio + ".xlsx")
+    with pd.ExcelWriter(file_name) as writer:
+        siif_ejec_mod_basicos = ejecucion_obras.reporte_siif_ejec_obras_actual()
+        siif_ejec_mod_basicos = siif_ejec_mod_basicos.loc[siif_ejec_mod_basicos['estructura'].str.startswith('29')]
+        siif_ejec_mod_basicos.to_excel(
+            writer, sheet_name='EjecuccionSIIF' + ejercicio, index=False
+            )
+        ejecucion_obras.reporte_icaro_mod_basicos().to_excel(
+            writer, sheet_name='ModBasicosPorConvFte11', index=False
+            )
+        icaro_mod_basicos_ejercicios = ejecucion_obras.reporte_icaro_mod_basicos(por_convenio=False)
+        icaro_mod_basicos_ejercicios.to_excel(
+            writer, sheet_name='ModBasicosPorEjercicio', index=False
+            )
+
+
+# --------------------------------------------------
+if __name__ == "__main__":
+    main()
+    # python -m src.invicoctrlpy.gastos.ejecucion_obras.ejecucion_obras
